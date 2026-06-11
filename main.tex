@@ -1,0 +1,97 @@
+\documentclass{article}
+\usepackage{iclr2026/iclr2026_conference,times}
+\input{iclr2026/math_commands.tex}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{hyperref}
+\usepackage{url}
+
+\title{Robot Skill Half-Life: A Drift-Aware Diagnostic for Deployed Manipulation Policies}
+\author{}
+\iclrfinalcopy
+
+\newtheorem{definition}{Definition}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Robot learning papers usually report how well a skill works immediately after training, adaptation, or calibration. Deployment asks a different question: how long does that skill remain useful as sensors, tools, fixtures, payloads, and contact conditions drift? We propose robot skill half-life, the time until a deployed policy's success probability falls below half of its initial value under a specified drift process. The metric is intentionally simple. It does not replace success rate, continual learning, or maintenance protocols; it makes their long-horizon value reportable in common units. A deterministic drift simulation shows the failure mode: two policies with similar initial success can have sharply different usable lifetimes. Frozen skills decay quickly, calendar recalibration helps, and sentinel-triggered rehearsal extends the half-life without claiming to solve adaptation. The contribution is a diagnostic: report not only what a robot can do now, but how quickly that ability expires.
+\end{abstract}
+
+\section{Introduction}
+Robot manipulation skills are often treated as artifacts: train a policy, validate it on a benchmark, then deploy it. This framing fits static leaderboards but mismatches physical systems. A robot's cameras drift, tactile thresholds change, grippers wear, fixtures move, and objects arrive with slightly different geometry or compliance. A skill that is excellent on day one can become marginal on day thirty without any discrete failure event.
+
+Continual learning, sim-to-real adaptation, calibration, and robust policy design all address pieces of this problem \citep{kirkpatrick2017ewc, rusu2016progressive, jeong2020sim2real, finn2017maml}. Yet the reporting language remains dominated by initial success or final adapted success. We argue for a complementary diagnostic: the half-life of a robot skill under a named drift process.
+
+The paper's claim is deliberately narrow. Skill half-life is not a new controller. It is a measurement target that exposes whether maintenance and adaptation actually buy time.
+
+\section{Skill Half-Life}
+Let $S_\pi(t)$ denote the success probability of policy $\pi$ after $t$ days or cycles of deployment under a specified drift process. Let $S_\pi(0)$ be the initial success probability measured after training or calibration.
+
+\begin{definition}[Robot skill half-life]
+The half-life of policy $\pi$ is
+\[
+H(\pi) = \inf \{ t \geq 0 : S_\pi(t) \leq \tfrac{1}{2} S_\pi(0) \}.
+\]
+If the threshold is not crossed during the observation window, the half-life is right-censored at the end of that window.
+\end{definition}
+
+The definition is useful because it separates three quantities that are often conflated: initial competence, decay rate, and maintenance response. Two policies can start with the same benchmark score and have different half-lives. Conversely, a policy with slightly lower initial success can be more deployable if it decays slowly.
+
+\section{Toy Drift Model}
+We simulate a contact-rich manipulation skill over 60 deployment days. Each trial starts with high success probability. Latent embodiment drift increases effective skill age, and two shock events mimic fixture or payload changes. We compare four conditions:
+\begin{itemize}
+    \item a frozen skill with no updates,
+    \item calendar recalibration every 21 days,
+    \item sentinel-triggered rehearsal after observed degradation,
+    \item an oracle adaptation upper bound.
+\end{itemize}
+
+This is not presented as a realistic robot benchmark. Its role is to make the reporting failure visible: initial success alone cannot distinguish a policy that expires quickly from one that remains usable.
+
+\begin{table}[t]
+\centering
+\caption{Skill half-life simulation over 48 deterministic trials. Half-lives censored at 61 days indicate that the curve did not cross half of initial success inside the 60-day window.}
+\label{tab:half_life}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Half-life & Censored & Day-60 success & Mean success \\
+\midrule
+Frozen skill & 21.2 & 0.00 & 0.08 & 0.38 \\
+Calendar recalibration & 21.8 & 0.00 & 0.31 & 0.55 \\
+Sentinel-triggered rehearsal & 61.0 & 1.00 & 0.62 & 0.76 \\
+Oracle adaptation & 61.0 & 1.00 & 0.70 & 0.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Interpretation}
+Table~\ref{tab:half_life} shows why the diagnostic matters. The frozen skill starts strong but loses deployment value as drift accumulates. Calendar recalibration delays the crossing but does not eliminate decay. Sentinel-triggered rehearsal buys substantially more usable life by linking maintenance to observed degradation rather than the calendar alone.
+
+The key point is not that sentinel rehearsal is optimal. The key point is that the half-life number makes this difference legible. A paper that reports only day-zero success would miss the maintenance burden.
+
+\section{Relation to Prior Work}
+Continual learning studies how agents preserve or acquire competence over streams of experience \citep{kirkpatrick2017ewc, rusu2016progressive}. Meta-learning and sim-to-real adaptation study rapid transfer to new conditions \citep{finn2017maml, jeong2020sim2real}. Robot calibration and maintenance work studies procedures for restoring performance. Skill half-life sits underneath these methods as a reporting layer: each method can be evaluated by how many deployment days or cycles it adds before competence falls below a chosen threshold.
+
+\section{Limitations}
+The simulation is intentionally small and does not establish a universal decay law. Real robot skill curves can be nonmonotonic, task-dependent, and expensive to estimate. The half threshold is also a convention rather than a law. These limitations do not remove the measurement need. They motivate reporting the full decay curve, the observation window, and the censoring rule alongside the scalar half-life.
+
+\section{Conclusion}
+Robot skills should be reported as temporal objects. A skill is not only a success rate; it is a success rate that persists, decays, or recovers under deployment drift. Robot skill half-life gives that persistence a simple name and a reproducible measurement target.
+
+\begin{thebibliography}{9}
+\bibitem[Finn et~al.(2017)]{finn2017maml}
+Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In \emph{ICML}, 2017.
+
+\bibitem[Jeong et~al.(2020)]{jeong2020sim2real}
+Rae Jeong, Yusuf Aytar, et~al. Self-supervised sim-to-real adaptation for visual robotic manipulation. In \emph{ICRA}, 2020.
+
+\bibitem[Kirkpatrick et~al.(2017)]{kirkpatrick2017ewc}
+James Kirkpatrick et~al. Overcoming catastrophic forgetting in neural networks. \emph{PNAS}, 2017.
+
+\bibitem[Rusu et~al.(2016)]{rusu2016progressive}
+Andrei A. Rusu et~al. Progressive neural networks. \emph{arXiv preprint arXiv:1606.04671}, 2016.
+\end{thebibliography}
+
+\end{document}

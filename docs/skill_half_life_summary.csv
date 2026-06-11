@@ -1,0 +1,5 @@
+policy,mean_half_life_days,censored_fraction,day60_success,mean_success_auc
+frozen,21.187500,0.000000,0.082676,0.381181
+calendar_recalibration,21.750000,0.000000,0.309223,0.551182
+sentinel_rehearsal,61.000000,1.000000,0.623185,0.762314
+oracle_adapt,61.000000,1.000000,0.696665,0.798441
