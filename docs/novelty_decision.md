@@ -14,3 +14,7 @@ The idea is small but sharp. It makes maintenance, rehearsal, recalibration, and
 
 ## Scope limits
 The paper gives a diagnostic and a simulation, not a universal law about real robot aging. A real deployment study would be the next step.
+
+## V2 boundary
+
+The scalar half-life is not meaningful without its threshold and observation window. The v2 stress shows that sentinel rehearsal is censored at 61 days under the 60-day half-success setup but crosses at 89.0 days under a 120-day window. The novelty is the reporting protocol, not a privileged threshold.
