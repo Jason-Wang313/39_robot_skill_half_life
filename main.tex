@@ -8,7 +8,6 @@
 
 \title{Robot Skill Half-Life: A Drift-Aware Diagnostic for Deployed Manipulation Policies}
 \author{}
-\iclrfinalcopy
 
 \newtheorem{definition}{Definition}
 
@@ -16,8 +15,13 @@
 \maketitle
 
 \begin{abstract}
-Robot learning papers usually report how well a skill works immediately after training, adaptation, or calibration. Deployment asks a different question: how long does that skill remain useful as sensors, tools, fixtures, payloads, and contact conditions drift? We propose robot skill half-life, the time until a deployed policy's success probability falls below half of its initial value under a specified drift process. The metric is intentionally simple. It does not replace success rate, continual learning, or maintenance protocols; it makes their long-horizon value reportable in common units. A deterministic drift simulation shows the failure mode: two policies with similar initial success can have sharply different usable lifetimes. Frozen skills decay quickly, calendar recalibration helps, and sentinel-triggered rehearsal extends the half-life without claiming to solve adaptation. The contribution is a diagnostic: report not only what a robot can do now, but how quickly that ability expires.
+Robot learning papers usually report how well a skill works immediately after training, adaptation, or calibration. Deployment asks a different question: how long does that skill remain useful as sensors, tools, fixtures, payloads, and contact conditions drift? We propose robot skill half-life, the time until a deployed policy's success probability falls below half of its initial value under a specified drift process. The metric is intentionally simple. It does not replace success rate, continual learning, or maintenance protocols; it makes their long-horizon value reportable in common units. A deterministic drift simulation shows the failure mode: two policies with similar initial success can have sharply different usable lifetimes. Frozen skills decay quickly, calendar recalibration helps, and sentinel-triggered rehearsal extends the half-life without claiming to solve adaptation. A v2 threshold/horizon stress shows the boundary: the 60-day sentinel result is censored, not infinite; under a 120-day window it crosses half-success at 89.0 days. The contribution is a diagnostic: report not only what a robot can do now, but how quickly that ability expires.
 \end{abstract}
+
+\paragraph{V2 hardening note.}
+Submission-hardening version: v2. This version narrows the claim. Skill
+half-life is a reporting diagnostic that must be accompanied by the full decay
+curve, threshold fraction, observation window, and censoring rule.
 
 \section{Introduction}
 Robot manipulation skills are often treated as artifacts: train a policy, validate it on a benchmark, then deploy it. This framing fits static leaderboards but mismatches physical systems. A robot's cameras drift, tactile thresholds change, grippers wear, fixtures move, and objects arrive with slightly different geometry or compliance. A skill that is excellent on day one can become marginal on day thirty without any discrete failure event.
@@ -71,11 +75,25 @@ Table~\ref{tab:half_life} shows why the diagnostic matters. The frozen skill sta
 
 The key point is not that sentinel rehearsal is optimal. The key point is that the half-life number makes this difference legible. A paper that reports only day-zero success would miss the maintenance burden.
 
+\paragraph{V2 threshold and horizon sensitivity.}
+The strongest objection is that the half threshold and 60-day window are
+arbitrary. Table~\ref{tab:threshold-sensitivity} therefore reports a stricter
+80\% threshold and a 120-day horizon. The sentinel row in
+Table~\ref{tab:half_life} is censored at 61 days; it is not an infinite
+half-life. When the horizon is extended to 120 days, sentinel-triggered rehearsal
+crosses the half-success threshold at 89.0 days, while the oracle remains
+censored. The 80\% threshold also exposes early degradation: frozen skills cross
+at 7.4 days and calendar recalibration at 6.3 days despite higher day-60
+success. The scalar half-life is therefore useful only with its threshold,
+window, censoring flag, and preferably the full curve.
+
+\input{docs/threshold_sensitivity_stress_table.tex}
+
 \section{Relation to Prior Work}
 Continual learning studies how agents preserve or acquire competence over streams of experience \citep{kirkpatrick2017ewc, rusu2016progressive}. Meta-learning and sim-to-real adaptation study rapid transfer to new conditions \citep{finn2017maml, jeong2020sim2real}. Robot calibration and maintenance work studies procedures for restoring performance. Skill half-life sits underneath these methods as a reporting layer: each method can be evaluated by how many deployment days or cycles it adds before competence falls below a chosen threshold.
 
 \section{Limitations}
-The simulation is intentionally small and does not establish a universal decay law. Real robot skill curves can be nonmonotonic, task-dependent, and expensive to estimate. The half threshold is also a convention rather than a law. These limitations do not remove the measurement need. They motivate reporting the full decay curve, the observation window, and the censoring rule alongside the scalar half-life.
+The simulation is intentionally small and does not establish a universal decay law. Real robot skill curves can be nonmonotonic, task-dependent, and expensive to estimate. The half threshold is also a convention rather than a law. The v2 stress shows that rankings and apparent non-crossing can change with the threshold and observation window. These limitations do not remove the measurement need. They motivate reporting the full decay curve, the threshold, the observation window, and the censoring rule alongside the scalar half-life.
 
 \section{Conclusion}
 Robot skills should be reported as temporal objects. A skill is not only a success rate; it is a success rate that persists, decays, or recovers under deployment drift. Robot skill half-life gives that persistence a simple name and a reproducible measurement target.
