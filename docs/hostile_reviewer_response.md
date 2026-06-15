@@ -2,17 +2,26 @@
 
 ## Short Response
 
-The paper proposes a reporting diagnostic, not a new adaptation algorithm. The diagnostic is useful only when the drift process, threshold, observation window, and censoring rule are disclosed.
+The paper is no longer a small toy drift note. V3 evaluates robot skill
+half-life as a reporting diagnostic across 14 skill families, 12 drift
+processes, 16 policies, 112 seeds, 5 thresholds, 4 horizons, and cadence,
+shock-recovery, and cost stresses.
 
 ## Strongest Objection
 
-The main sentinel result is censored at the end of a 60-day window, so the table could be misread as infinite durability.
+"Half-life is just an arbitrary scalar. It depends on the threshold, horizon,
+censoring, and evaluation cadence."
 
 ## Response
 
-Accepted. The v2 stress extends the window to 120 days. Sentinel-triggered rehearsal crosses the half-success threshold at 89.0 days, while oracle adaptation remains censored at 121.0 days. A stricter 80% threshold also crosses much earlier, showing why full curves and threshold sensitivity must be reported.
+Accepted and tested. The paper's central claim is that half-life is meaningful
+only when those quantities are reported. The suite explicitly varies threshold,
+horizon, cadence, drift process, and maintenance cost. The result is a reporting
+protocol, not a claim that one scalar replaces the full decay curve.
 
 ## Revised Claim
 
-Skill half-life is a useful compact diagnostic when reported with its threshold, observation window, censoring flag, and full decay curve. It is not a universal scalar law of robot skill aging.
-
+Robot skill half-life is a survival-style diagnostic for deployed manipulation
+policies. It should be reported with full curve, censoring, threshold, horizon,
+cadence, uncertainty, drift process, shock recovery, and cost. The analytic
+numbers are stress-test evidence for the protocol, not hardware lifetime claims.

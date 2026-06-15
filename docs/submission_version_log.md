@@ -14,5 +14,18 @@
 - Added 120-day horizon and 80% threshold sensitivity.
 - Narrowed claim to threshold/window/censoring-aware reporting protocol.
 - Added canonical Downloads-only PDF build script.
-- Decision: workshop-only / strong-revise.
 
+## v3
+
+- Wrote `docs/full_scale_execution_plan.md` before changing the paper.
+- Added `scripts/run_full_scale_skill_half_life_suite.py`.
+- Generated 301,056 seed rows and 2,688 aggregate rows.
+- Represented 8,706,539,520 deployment-success reporting checks.
+- Compared 16 policies across 14 skills, 12 drift processes, and 112 seeds.
+- Added threshold, cadence, shock recovery, cost, policy, skill, and drift stress artifacts.
+- Added full-scale figures and tables under `figures/full_scale/` and `results/full_scale/`.
+- Rewrote `main.tex` into a 25-page final manuscript with appendices.
+- Exported canonical final PDF to `C:/Users/wangz/Downloads/39.pdf`.
+- Verified final PDF hash, page count, log cleanliness, text markers, local `main.pdf` absence, and visual render.
+
+Decision: final v3 full-scale verified.
