@@ -1,0 +1,26 @@
+{
+  "status": "complete",
+  "expected_seed_rows": 301056,
+  "actual_seed_rows": 301056,
+  "expected_aggregate_rows": 2688,
+  "actual_aggregate_rows": 2688,
+  "represented_reporting_checks": 8706539520,
+  "figures": [
+    "cost_uptime_frontier.pdf",
+    "drift_policy_heatmap.pdf",
+    "half_life_cost_frontier.pdf",
+    "representative_decay_curves.pdf",
+    "shock_recovery_tradeoff.pdf",
+    "threshold_sensitivity.pdf"
+  ],
+  "tables": [
+    "full_scale_cadence_sensitivity.tex",
+    "full_scale_cost_frontier.tex",
+    "full_scale_drift_stress.tex",
+    "full_scale_policy_summary.tex",
+    "full_scale_scale.tex",
+    "full_scale_shock_recovery.tex",
+    "full_scale_skill_summary.tex",
+    "full_scale_threshold_sensitivity.tex"
+  ]
+}

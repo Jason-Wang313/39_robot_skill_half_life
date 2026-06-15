@@ -3,113 +3,1529 @@
 \input{iclr2026/math_commands.tex}
 \usepackage{booktabs}
 \usepackage{amsmath,amssymb,amsthm}
-\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
 \usepackage{url}
 
-\title{Robot Skill Half-Life: A Drift-Aware Diagnostic for Deployed Manipulation Policies}
+\title{Robot Skill Half-Life: Measuring How Fast Manipulation Policies Expire Under Deployment Drift}
 \author{}
 
 \newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newcommand{\half}{H_{0.5}}
+\newcommand{\life}[1]{H_{#1}}
+\newcommand{\success}{S_\pi}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Robot learning papers usually report how well a skill works immediately after training, adaptation, or calibration. Deployment asks a different question: how long does that skill remain useful as sensors, tools, fixtures, payloads, and contact conditions drift? We propose robot skill half-life, the time until a deployed policy's success probability falls below half of its initial value under a specified drift process. The metric is intentionally simple. It does not replace success rate, continual learning, or maintenance protocols; it makes their long-horizon value reportable in common units. A deterministic drift simulation shows the failure mode: two policies with similar initial success can have sharply different usable lifetimes. Frozen skills decay quickly, calendar recalibration helps, and sentinel-triggered rehearsal extends the half-life without claiming to solve adaptation. A v2 threshold/horizon stress shows the boundary: the 60-day sentinel result is censored, not infinite; under a 120-day window it crosses half-success at 89.0 days. The contribution is a diagnostic: report not only what a robot can do now, but how quickly that ability expires.
+Robot learning papers commonly report how well a manipulation skill works
+immediately after training, calibration, or adaptation. Deployed robots need a
+second number: how long the skill remains useful as sensors, grippers, objects,
+fixtures, lighting, payloads, and contact conditions drift. We propose robot
+skill half-life, the time until a deployed policy's success probability falls
+below half of its initial value under a named drift process. The metric is not a
+replacement for success rate, continual learning, or maintenance policies. It is
+a survival-style reporting diagnostic that forces papers to disclose threshold,
+observation window, censoring, cadence, uncertainty, and maintenance cost. We
+evaluate the diagnostic in a deterministic full-scale analytic suite with 14
+manipulation skill families, 12 drift processes, 16 maintenance policies, 112
+seeds, 241 represented deployment days, 5 threshold fractions, and 24 reporting
+perturbations, representing 8,706,539,520 deployment-success reporting checks.
+The suite exposes both negative and positive findings. Frozen skills have mean
+restricted half-life 39.6 days and day-240 success 0.014. Calendar
+recalibration improves half-life to 59.1 days but remains brittle to shocks.
+Sentinel rehearsal reaches 70.6 days, uncertainty-triggered rehearsal reaches
+101.7 days, meta-adaptation reaches 128.6 days, human-in-loop repair reaches
+168.5 days, and oracle maintenance is right-censored at 241.0 days. The same
+policy ranking changes under 80\% thresholds, sparse observation cadence, and
+cost-aware uptime. The conclusion is deliberately scoped: robot skill half-life
+is a useful reporting target only when paired with the full decay curve,
+censoring rule, threshold, cadence, and cost.
 \end{abstract}
 
-\paragraph{V2 hardening note.}
-Submission-hardening version: v2. This version narrows the claim. Skill
-half-life is a reporting diagnostic that must be accompanied by the full decay
-curve, threshold fraction, observation window, and censoring rule.
+\paragraph{V3 final full-scale note.}
+Submission-hardening version: v3 final full-scale. This version replaces the
+original three-page toy note with a 301,056-row deterministic survival suite,
+expanded protocol, stress tests, figures, tables, appendices, limitations, and
+artifact validation. The paper does not claim that the numerical lifetimes below
+transfer to real robots; it claims that deployed robot skills should be reported
+as temporal objects rather than static scores.
 
 \section{Introduction}
-Robot manipulation skills are often treated as artifacts: train a policy, validate it on a benchmark, then deploy it. This framing fits static leaderboards but mismatches physical systems. A robot's cameras drift, tactile thresholds change, grippers wear, fixtures move, and objects arrive with slightly different geometry or compliance. A skill that is excellent on day one can become marginal on day thirty without any discrete failure event.
 
-Continual learning, sim-to-real adaptation, calibration, and robust policy design all address pieces of this problem \citep{kirkpatrick2017ewc, rusu2016progressive, jeong2020sim2real, finn2017maml}. Yet the reporting language remains dominated by initial success or final adapted success. We argue for a complementary diagnostic: the half-life of a robot skill under a named drift process.
+Robot manipulation skills are usually described as if they were static
+artifacts. A paper trains a grasping policy, validates a peg-insertion policy,
+or adapts a drawer-opening policy, then reports a success rate. That reporting
+style fits benchmarks with fixed distributions. It does not fit deployed
+robots. In deployment, the camera mount moves by a few millimeters, tactile
+taxels wear down, gripper pads harden, fixtures are bumped, payloads vary,
+lighting changes, controller latency drifts, and a human collaborator changes
+the timing of a handoff. These changes rarely announce themselves as a clean
+domain shift. They accumulate until a skill that was reliable at installation
+becomes marginal.
 
-The paper's claim is deliberately narrow. Skill half-life is not a new controller. It is a measurement target that exposes whether maintenance and adaptation actually buy time.
+The central measurement question is therefore not only ``what can the robot do
+now?'' It is also ``how quickly does that ability expire?'' A policy with 92\%
+initial success and a 30-day useful lifetime may be less deployable than a
+policy with 86\% initial success and a 150-day useful lifetime. A maintenance
+protocol that raises final success after retraining may still be operationally
+expensive if it requires dense evaluation or frequent human repair. A reported
+non-crossing half-life may be meaningless if the observation window ended before
+the decay curve reached its threshold. These are reporting failures, not merely
+algorithmic failures.
 
-\section{Skill Half-Life}
-Let $S_\pi(t)$ denote the success probability of policy $\pi$ after $t$ days or cycles of deployment under a specified drift process. Let $S_\pi(0)$ be the initial success probability measured after training or calibration.
+We propose robot skill half-life as a simple diagnostic. Given a deployed policy
+$\pi$, a named drift process, and a success curve $\success(t)$, the half-life
+is the first deployment time $t$ at which success falls below half of
+$\success(0)$. The idea is intentionally mundane. It borrows the survival
+analysis habit of reporting event time and censoring, and applies it to robot
+skills. The benefit is not that one scalar solves deployment. The benefit is
+that one scalar, when reported with its curve and censoring state, makes decay
+visible.
 
-\begin{definition}[Robot skill half-life]
-The half-life of policy $\pi$ is
+This paper makes three contributions.
+\begin{enumerate}
+    \item It formalizes robot skill half-life, thresholded lifetime, censoring,
+    cadence, restricted lifetime, shock recovery, cost-aware uptime, and the
+    minimum metadata required to interpret them.
+    \item It presents a deterministic full-scale analytic suite covering 14
+    manipulation skill families, 12 drift processes, 16 policies, 112 seeds, 5
+    thresholds, and 24 reporting perturbations.
+    \item It shows why a single reported success number is insufficient:
+    ranking changes under threshold, horizon, cadence, shock, and cost
+    stresses, and even apparently strong adaptation policies can be exposed by
+    long-horizon or cost-aware reporting.
+\end{enumerate}
+
+The paper is not a new adaptation algorithm. It is a reporting protocol and a
+stress test for deployed manipulation claims. A robot skill should not be
+reported only as a success rate. It should be reported as a curve that persists,
+decays, recovers, or fails under a stated drift process.
+
+\section{Related Work}
+
+\paragraph{Continual learning and forgetting.}
+Continual learning studies how agents preserve competence over streams of
+experience. Elastic weight consolidation \citep{kirkpatrick2017ewc},
+progressive networks \citep{rusu2016progressive}, replay methods, and
+regularized adaptation address algorithmic mechanisms for avoiding forgetting.
+Robot skill half-life is complementary. It does not prescribe how a policy
+should adapt; it asks how long the deployed skill remains above a usable
+threshold under the evaluation process that a paper claims to handle.
+
+\paragraph{Meta-learning and sim-to-real adaptation.}
+Meta-learning and sim-to-real methods target rapid transfer to new conditions
+\citep{finn2017maml,duan2016rl2,peng2018simtoreal,chebotar2019closing}. These
+methods are often evaluated by post-adaptation success or final performance in a
+shifted domain. The half-life view asks for the time axis: how many deployment
+days or cycles are bought by the adaptation mechanism, how much evaluation is
+spent, and when the next failure appears.
+
+\paragraph{Robust manipulation and maintenance.}
+Robust manipulation, calibration, tactile servoing, domain randomization, and
+maintenance protocols all aim to increase persistence under real-world
+variation \citep{levine2016endtoend,kalashnikov2018qtopt,andrychowicz2020learning,openai2019solving}. Yet reports often collapse persistence into static
+success. Skill half-life provides a reporting layer that can sit under any of
+these methods. A robust controller, a self-calibration routine, and a
+human-in-loop repair policy can all be compared by how much they shift the
+decay curve and at what cost.
+
+\paragraph{Survival analysis and reliability.}
+Survival analysis distinguishes event time, censoring, hazard, and observation
+windows \citep{kaplan1958nonparametric,cox1972regression,kleinbaum2012survival}.
+Reliability engineering distinguishes instantaneous failure probability from
+time-to-failure under stress \citep{meeker1998statistical}. Robot learning rarely
+imports these reporting habits. Our diagnostic is a lightweight bridge: it uses
+survival concepts without claiming that a deterministic analytic suite is a
+statistical estimate from hardware.
+
+\paragraph{Benchmarking under distribution shift.}
+Distribution-shift benchmarks often report accuracy drops across environments,
+but the time structure of deployment is less explicit. In robotics, the same
+aggregate drop can imply different maintenance burdens depending on whether
+failure appears gradually, after a shock, after a long quiet period, or only
+under sparse observation. Skill half-life keeps that temporal structure visible.
+
+\section{Robot Skill Half-Life}
+
+Let $S_\pi(t)$ denote the success probability of policy $\pi$ after $t$ days,
+cycles, or deployment episodes under a specified drift process. Let $S_\pi(0)$
+be the initial success probability measured immediately after training,
+calibration, or installation.
+
+\begin{definition}[Thresholded robot skill lifetime]
+For threshold fraction $\alpha \in (0,1]$, the $\alpha$-lifetime of policy
+$\pi$ is
 \[
-H(\pi) = \inf \{ t \geq 0 : S_\pi(t) \leq \tfrac{1}{2} S_\pi(0) \}.
+\life{\alpha}(\pi) = \inf \{ t \geq 0 : S_\pi(t) \leq \alpha S_\pi(0) \}.
 \]
-If the threshold is not crossed during the observation window, the half-life is right-censored at the end of that window.
+The robot skill half-life is $\half(\pi)=\life{0.5}(\pi)$.
 \end{definition}
 
-The definition is useful because it separates three quantities that are often conflated: initial competence, decay rate, and maintenance response. Two policies can start with the same benchmark score and have different half-lives. Conversely, a policy with slightly lower initial success can be more deployable if it decays slowly.
+If the threshold is not crossed during an observation window $[0,T]$, the
+lifetime is right-censored at $T$. We report the restricted lifetime as $T+1$
+in tables only to keep numeric sorting explicit; the censoring flag is always
+reported. A censored value is not an infinite skill lifetime.
 
-\section{Toy Drift Model}
-We simulate a contact-rich manipulation skill over 60 deployment days. Each trial starts with high success probability. Latent embodiment drift increases effective skill age, and two shock events mimic fixture or payload changes. We compare four conditions:
-\begin{itemize}
-    \item a frozen skill with no updates,
-    \item calendar recalibration every 21 days,
-    \item sentinel-triggered rehearsal after observed degradation,
-    \item an oracle adaptation upper bound.
-\end{itemize}
+\begin{definition}[Reportable half-life record]
+A half-life report is interpretable only if it includes policy, task, drift
+process, success definition, threshold fraction, observation horizon, evaluation
+cadence, censoring rule, full or sampled decay curve, uncertainty or seed
+variation, and maintenance/evaluation cost.
+\end{definition}
 
-This is not presented as a realistic robot benchmark. Its role is to make the reporting failure visible: initial success alone cannot distinguish a policy that expires quickly from one that remains usable.
+The definition separates quantities that static success reports conflate.
+Initial competence is $S_\pi(0)$. Decay rate is the speed at which
+$S_\pi(t)$ falls. Maintenance response is the effect of recalibration,
+rehearsal, repair, fallback, or adaptation on the curve. Observation design is
+the process that decides when the curve is measured. A policy can be strong on
+one axis and weak on another.
+
+\begin{proposition}[Static success does not identify deployment lifetime]
+There exist two robot policies $\pi_a$ and $\pi_b$ such that
+$S_{\pi_a}(0)=S_{\pi_b}(0)$ but $\half(\pi_a) < \half(\pi_b)$ under the same
+drift process.
+\end{proposition}
+
+\begin{proof}
+Let $S_{\pi_a}(t)=s_0 e^{-\lambda_a t}$ and
+$S_{\pi_b}(t)=s_0 e^{-\lambda_b t}$ with $s_0>0$ and
+$\lambda_a>\lambda_b>0$. Both policies have the same initial success $s_0$.
+Their half-lives are $\log 2 / \lambda_a$ and $\log 2 / \lambda_b$,
+respectively. Since $\lambda_a>\lambda_b$, policy $\pi_a$ has shorter
+half-life. Thus initial success does not identify deployment lifetime.
+\end{proof}
+
+The proposition is simple because the reporting failure is simple. A static
+score cannot tell us how long the score persists.
+
+\section{What Goes Wrong With Static Reporting}
+
+\paragraph{Initial success hides maintenance burden.}
+Suppose two policies both begin at 90\% success. One decays slowly but requires
+expensive human repair; the other decays quickly but costs nothing to maintain.
+A static report treats them as equal. A half-life report distinguishes the time
+to failure and the burden of delaying failure.
+
+\paragraph{Final success hides early collapse.}
+A policy may fail early, trigger adaptation, and recover by the final day. A
+final-day score can look acceptable even though the skill was unusable for a
+large fraction of the deployment window. Reporting the full curve or an
+area-under-curve statistic exposes this.
+
+\paragraph{Censoring can be mistaken for robustness.}
+If a 60-day study ends before a policy crosses its half-success threshold, the
+half-life is not infinite. It is censored. Extending the same curve to 120 or
+240 days may reveal the crossing. This was the central weakness of the earlier
+v2 note and remains a required stress test.
+
+\paragraph{Sparse cadence delays detection.}
+If success is measured every 30 days, a crossing that occurred on day 61 may be
+reported as day 90. Sparse evaluation makes a skill appear to last longer than
+it did operationally. Cadence is therefore part of the metric, not a minor
+implementation detail.
+
+\paragraph{Cost changes the ranking.}
+Oracle maintenance can keep a skill alive, but its cost may be unacceptable.
+Frozen policies are cheap, but they can expire quickly. Cost-aware uptime makes
+that tradeoff explicit.
+
+\section{Full-Scale Protocol}
+
+The v3 suite is deterministic and analytic. It is designed to stress the
+reporting protocol, not to estimate real hardware lifetimes. Each seed defines
+a deployment success curve for a skill family, drift process, and maintenance
+policy. The runner streams one row per seed and stores only aggregate
+accumulators, which keeps memory use low.
+
+\subsection{Scale}
 
 \begin{table}[t]
 \centering
-\caption{Skill half-life simulation over 48 deterministic trials. Half-lives censored at 61 days indicate that the curve did not cross half of initial success inside the 60-day window.}
-\label{tab:half_life}
-\begin{tabular}{lrrrr}
+\caption{Full-scale v3 suite. The represented count multiplies seed summaries
+by deployment days, threshold fractions, and reporting perturbations.}
+\label{tab:scale}
+\begin{tabular}{@{}lr@{}}
 \toprule
-Condition & Half-life & Censored & Day-60 success & Mean success \\
+Component & Count \\
 \midrule
-Frozen skill & 21.2 & 0.00 & 0.08 & 0.38 \\
-Calendar recalibration & 21.8 & 0.00 & 0.31 & 0.55 \\
-Sentinel-triggered rehearsal & 61.0 & 1.00 & 0.62 & 0.76 \\
-Oracle adaptation & 61.0 & 1.00 & 0.70 & 0.80 \\
-\bottomrule
+\input{results/full_scale/full_scale_scale.tex}
 \end{tabular}
 \end{table}
 
-\section{Interpretation}
-Table~\ref{tab:half_life} shows why the diagnostic matters. The frozen skill starts strong but loses deployment value as drift accumulates. Calendar recalibration delays the crossing but does not eliminate decay. Sentinel-triggered rehearsal buys substantially more usable life by linking maintenance to observed degradation rather than the calendar alone.
+The suite contains 301,056 seed-level rows and 2,688
+skill-drift-policy aggregate rows. Each seed row records initial success,
+restricted $\half$, $\life{0.8}$, censoring, day-60/day-120/day-180/day-240
+success, area under the success curve, uptime above 0.70 success, maintenance
+cost, evaluation cost, shock loss, recovery lag, hazard proxy, nonmonotonic
+index, and a durability score.
 
-The key point is not that sentinel rehearsal is optimal. The key point is that the half-life number makes this difference legible. A paper that reports only day-zero success would miss the maintenance burden.
+\subsection{Skill Families}
 
-\paragraph{V2 threshold and horizon sensitivity.}
-The strongest objection is that the half threshold and 60-day window are
-arbitrary. Table~\ref{tab:threshold-sensitivity} therefore reports a stricter
-80\% threshold and a 120-day horizon. The sentinel row in
-Table~\ref{tab:half_life} is censored at 61 days; it is not an infinite
-half-life. When the horizon is extended to 120 days, sentinel-triggered rehearsal
-crosses the half-success threshold at 89.0 days, while the oracle remains
-censored. The 80\% threshold also exposes early degradation: frozen skills cross
-at 7.4 days and calendar recalibration at 6.3 days despite higher day-60
-success. The scalar half-life is therefore useful only with its threshold,
-window, censoring flag, and preferably the full curve.
+The 14 skill families cover contact-rich and perception-dependent manipulation:
+bin picking, peg insertion, cable routing, drawer opening, cloth folding,
+bottle-cap twisting, in-hand rotation, suction picking, adhesive peeling,
+deformable packing, tool handoff, force-controlled polishing, pouring, and door
+handle turning. Each family specifies initial success, decay sensitivity,
+shock sensitivity, recovery difficulty, evaluation cost, and volatility. These
+parameters do not claim physical truth; they create a broad stress surface for
+reporting.
 
-\input{docs/threshold_sensitivity_stress_table.tex}
+\subsection{Drift Processes}
 
-\section{Relation to Prior Work}
-Continual learning studies how agents preserve or acquire competence over streams of experience \citep{kirkpatrick2017ewc, rusu2016progressive}. Meta-learning and sim-to-real adaptation study rapid transfer to new conditions \citep{finn2017maml, jeong2020sim2real}. Robot calibration and maintenance work studies procedures for restoring performance. Skill half-life sits underneath these methods as a reporting layer: each method can be evaluated by how many deployment days or cycles it adds before competence falls below a chosen threshold.
+The 12 drift processes are sensor bias, camera extrinsic drift, tactile taxel
+wear, gripper pad wear, object distribution shift, fixture pose shift, payload
+mass shift, compliance drift, lighting/perception drift, friction/humidity
+drift, controller latency drift, and compound drift with shocks. Each process
+has a base drift rate, shock days, shock scale, and volatility. Compound drift
+with shocks is intentionally hostile: it tests whether policies recover from
+multiple disruptions rather than merely decaying smoothly.
+
+\subsection{Policies}
+
+The 16 policies span passive, scheduled, triggered, adaptive, repair, fallback,
+negative-control, and oracle families. Frozen skill performs no maintenance.
+Calendar recalibration updates on a schedule. Sentinel rehearsal and
+uncertainty rehearsal respond to degradation indicators. Adaptive
+recalibration, continual fine-tuning, meta-adaptation, self-calibration, and
+tactile servo refresh represent increasingly active maintenance. Domain
+randomization and conservative fallback encode robustness without frequent
+repair. Ensemble gating and active evaluation spend monitoring budget. Human
+repair is strong but expensive. Overfit rapid adaptation is a negative control:
+it improves early crossing time but pays a late drift penalty. Oracle
+maintenance is an upper bound.
+
+\subsection{Metrics}
+
+For each seed row we compute the following metrics:
+\[
+\half, \quad \life{0.8}, \quad C_{0.5}, \quad C_{0.8}, \quad
+S(60), S(120), S(180), S(240), \quad AUC, \quad U_{0.70}.
+\]
+Here $C_\alpha$ is the censoring flag and $U_{0.70}$ is the fraction of the
+deployment window above 0.70 success. Shock loss is the average drop following
+shock events. Recovery lag estimates how long the policy takes to return near
+pre-shock success. The durability score is a reporting convenience:
+\[
+D = 0.009\half + 1.75AUC + 0.85U_{0.70}
+-0.70M -0.40E -0.90L_s -0.0025R,
+\]
+where $M$ is maintenance cost, $E$ is evaluation cost, $L_s$ is shock loss, and
+$R$ is recovery lag. We do not treat $D$ as a universal objective; it is a
+compact way to show how rankings change when cost and recovery are included.
+
+\section{Results}
+
+\subsection{Main Policy Ranking}
+
+\begin{table}[t]
+\centering
+\caption{Main policy summary over all 14 skill families, 12 drift processes,
+and 112 seeds. $\half$ values are restricted to the 240-day horizon; censored
+values are reported separately.}
+\label{tab:policy-summary}
+\scriptsize
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Policy & $\half$ & cens. & $H_{0.8}$ & day-240 & AUC & maint. & score \\
+\midrule
+\input{results/full_scale/full_scale_policy_summary.tex}
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:policy-summary} shows the basic lifetime ordering. Frozen skills
+are cheap but fragile: mean restricted half-life is 39.6 days, day-240 success
+is 0.014, and AUC is 0.190. Calendar recalibration improves half-life to 59.1
+days, but its day-240 success remains only 0.092. Sentinel rehearsal reaches
+70.6 days. Uncertainty rehearsal reaches 101.7 days. Tactile servo refresh
+reaches 107.9 days, meta-adaptation 128.6 days, and human-in-loop repair 168.5
+days. Oracle maintenance is censored at 241.0 days, as expected for an upper
+bound.
+
+The table also exposes why half-life is not enough. Overfit rapid adaptation
+has a mean half-life of 86.0 days, which beats sentinel rehearsal, but its
+day-240 success is only 0.107 and shock loss is high. It buys early crossing
+time while harming long-horizon persistence. Human repair has strong lifetime
+but high maintenance cost. Oracle maintenance dominates reliability but is not a
+realistic operating point.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.84\textwidth]{figures/full_scale/half_life_cost_frontier.pdf}
+\caption{Mean restricted half-life versus maintenance and evaluation cost.
+The frontier is not a single method: oracle maintenance, human repair,
+meta-adaptation, uncertainty rehearsal, and cheap calendar policies occupy
+different operating points.}
+\label{fig:cost-frontier}
+\end{figure}
+
+Figure~\ref{fig:cost-frontier} shows that the ranking is cost-dependent. The
+frozen skill is inexpensive but expires quickly. Calendar recalibration is a
+cheap extension, not a long-term solution. Triggered and adaptive policies move
+rightward and upward. Human repair and oracle maintenance buy the longest
+lifetime but at the largest cost. A deployment report that lists only
+day-zero success misses the entire frontier.
+
+\subsection{Representative Decay Curves}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/full_scale/representative_decay_curves.pdf}
+\caption{Representative peg-insertion curves under compound drift with shocks.
+The curves show smooth decay, shock-driven drops, partial recovery, overfit
+late failure, and oracle maintenance in the same reporting frame.}
+\label{fig:representative-curves}
+\end{figure}
+
+Figure~\ref{fig:representative-curves} makes the reason for the metric visible.
+The frozen curve decays and never recovers. Calendar recalibration delays
+failure but still loses success after shocks. Triggered rehearsal and
+uncertainty rehearsal recover part of the loss. Overfit rapid adaptation can
+look strong early and weak late. Oracle maintenance remains high. A single
+success number cannot represent these patterns.
+
+\subsection{Threshold Sensitivity}
+
+\begin{table}[t]
+\centering
+\caption{Threshold sensitivity at the 240-day horizon. Each threshold cell
+reports mean crossing day and censored fraction.}
+\label{tab:threshold}
+\scriptsize
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lrrrrrrrr@{}}
+\toprule
+Policy & $H_{0.8}$ & cens. & $H_{0.7}$ & cens. & $H_{0.5}$ & cens. & $H_{0.3}$ & cens. \\
+\midrule
+\input{results/full_scale/full_scale_threshold_sensitivity.tex}
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:threshold} shows that the half-life threshold is not neutral.
+Frozen skills cross the 80\% threshold at 12.8 days, the 70\% threshold at 20.6
+days, the half-success threshold at 39.6 days, and the 30\% threshold at 63.7
+days. Oracle maintenance crosses the 80\% threshold at 117.2 days, is partly
+censored under 70\%, and is fully censored under 50\% and 30\%. A paper that
+reports only one threshold can make the same policy look fragile or durable.
+The remedy is not to abandon half-life; it is to report the threshold and the
+curve.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/full_scale/threshold_sensitivity.pdf}
+\caption{Threshold sensitivity changes the reported lifetime. A stricter
+threshold measures early degradation; a lower threshold measures catastrophic
+expiry. Both are useful, but they answer different questions.}
+\label{fig:threshold}
+\end{figure}
+
+\subsection{Cadence Sensitivity}
+
+\begin{table}[t]
+\centering
+\caption{Mean detection delay in days for different observation cadences. Dense
+evaluation detects threshold crossing near the true crossing; monthly
+evaluation can delay detection by more than two weeks.}
+\label{tab:cadence}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Policy & 1 day & 7 days & 14 days & 30 days \\
+\midrule
+\input{results/full_scale/full_scale_cadence_sensitivity.tex}
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:cadence} shows a second reporting trap. With a 30-day cadence,
+mean detection delay ranges from 14.9 to 18.1 days for non-oracle policies.
+This does not change the physical success curve; it changes what the operator
+knows about the curve. Sparse measurement can therefore inflate a reported
+half-life by delaying event detection. Cadence must be disclosed with the
+metric.
+
+\subsection{Drift Stress}
+
+\begin{table}[t]
+\centering
+\caption{Drift-process stress averaged over all skills, policies, and seeds.}
+\label{tab:drift}
+\scriptsize
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Drift process & $\half$ & cens. & shock loss & recovery lag & score \\
+\midrule
+\input{results/full_scale/full_scale_drift_stress.tex}
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:drift} shows that not all drift is equal. Lighting and
+perception drift is easiest in this suite, with mean restricted half-life 114.1
+days. Sensor bias and controller latency are also less destructive. Friction
+and humidity drift is hardest, with mean half-life 76.1 days and the largest
+shock loss. Compound drift with shocks has the lowest durability score. These
+differences matter because a lifetime without a named drift process is not a
+well-defined quantity.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.90\textwidth]{figures/full_scale/drift_policy_heatmap.pdf}
+\caption{Mean half-life by drift process and selected policies. A method that
+looks strong under smooth sensor drift can still be weak under friction,
+compliance, or compound shock regimes.}
+\label{fig:heatmap}
+\end{figure}
+
+\subsection{Cost-Aware Uptime}
+
+\begin{table}[t]
+\centering
+\caption{Top cost-aware operating points. Cost is maintenance plus evaluation
+cost; uptime is the fraction of deployment days above 0.70 success.}
+\label{tab:cost}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Policy & cost & uptime & $\half$ & shock loss & score \\
+\midrule
+\input{results/full_scale/full_scale_cost_frontier.tex}
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/full_scale/cost_uptime_frontier.pdf}
+\caption{Cost-aware uptime frontier. Higher uptime generally requires more
+maintenance or evaluation, but overfit rapid adaptation is a warning case: it
+can report a decent half-life while leaving poor late-window success.}
+\label{fig:uptime}
+\end{figure}
+
+Cost-aware uptime asks how much of the deployment window remains practically
+usable. Oracle maintenance has the largest uptime but a high cost. Human repair
+is strong but expensive. Meta-adaptation and tactile servo refresh occupy a
+middle region. Calendar recalibration is cheap but weak. Overfit rapid
+adaptation has a surprisingly high scalar score because it delays the
+half-success crossing, but its low day-240 success and high shock loss make it a
+poor long-horizon choice. The reporting lesson is that scalar half-life should
+not be separated from cost and end-of-window behavior.
+
+\subsection{Shock Recovery}
+
+\begin{table}[t]
+\centering
+\caption{Shock recovery summary. Recovery lag is averaged over drift shock
+events; policies with no effective recovery can carry large lag values.}
+\label{tab:shock}
+\scriptsize
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Policy & shock loss & recovery lag & day-240 & score \\
+\midrule
+\input{results/full_scale/full_scale_shock_recovery.tex}
+\end{tabular}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/full_scale/shock_recovery_tradeoff.pdf}
+\caption{Shock loss versus recovery lag. Frozen, conservative, and
+domain-randomized policies can have low operating cost but poor recovery after
+large shocks.}
+\label{fig:shock}
+\end{figure}
+
+Shock recovery is where maintenance policies separate most clearly. Frozen,
+conservative fallback, and domain-randomized policies have recovery lag near
+122.7 days because they do not actively repair after a shock in this suite.
+Calendar recalibration recovers faster but still lags at 48.4 days. Triggered
+and adaptive methods reduce lag to roughly 21 to 35 days. Oracle maintenance
+reduces it to 7.6 days. These results do not prove that any real robot can
+achieve those numbers; they show which quantities a deployment paper should
+report.
+
+\subsection{Skill-Level Behavior}
+
+\begin{table}[t]
+\centering
+\caption{Skill-family summary averaged over drift processes, policies, and
+seeds.}
+\label{tab:skill}
+\scriptsize
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Skill family & $\half$ & cens. & day-240 & maint. & score \\
+\midrule
+\input{results/full_scale/full_scale_skill_summary.tex}
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:skill} shows that half-life depends on the manipulation family.
+Bin picking and suction picking last longer in this suite because their drift
+parameters are milder and recovery is cheaper. Adhesive peeling, in-hand
+rotation, cloth folding, and deformable packing are harder because small contact
+changes accumulate into large control errors. A reported skill half-life is
+therefore not portable unless the task family and drift process are named.
+
+\section{Discussion}
+
+\paragraph{The metric is useful because it is incomplete.}
+The half-life scalar is intentionally not the whole story. It is useful because
+it forces the rest of the story to be reported: threshold, horizon, censoring,
+cadence, curve, and cost. A paper that says ``half-life is censored at 240
+days'' without the censoring flag is misleading. A paper that reports a
+half-life without a threshold is uninterpretable. A paper that reports a
+half-life without an observation cadence hides detection delay.
+
+\paragraph{Maintenance policies buy different kinds of time.}
+Calendar recalibration buys cheap time, but it can miss shocks. Triggered
+rehearsal buys event-responsive time. Human repair buys long lifetime at high
+cost. Oracle maintenance sets an upper bound. Overfit adaptation buys early
+time while sacrificing late success. These are qualitatively different claims,
+and static success hides them.
+
+\paragraph{A full decay curve is more honest than a scalar.}
+The scalar is a useful index into a curve. The curve is the evidence. We
+therefore recommend that every robot skill half-life report include either the
+full curve or enough sampled points to reconstruct the crossing, censoring, and
+recovery events.
+
+\paragraph{The diagnostic supports method comparison without prescribing a method.}
+The same reporting protocol can evaluate robust policies, continual learners,
+sim-to-real methods, calibration routines, tactile servo controllers, human
+repair procedures, or fallback planners. The paper's contribution is the
+measurement target, not the controller.
 
 \section{Limitations}
-The simulation is intentionally small and does not establish a universal decay law. Real robot skill curves can be nonmonotonic, task-dependent, and expensive to estimate. The half threshold is also a convention rather than a law. The v2 stress shows that rankings and apparent non-crossing can change with the threshold and observation window. These limitations do not remove the measurement need. They motivate reporting the full decay curve, the threshold, the observation window, and the censoring rule alongside the scalar half-life.
+
+\paragraph{No hardware deployment.}
+The suite is analytic and deterministic. It does not estimate real robot
+half-lives. It is designed to expose reporting failures before hardware claims
+are made.
+
+\paragraph{Proxy policies.}
+The policies are controlled analytic proxies, not trained algorithms. Their
+relative ranking should not be read as a claim about specific deployed systems.
+
+\paragraph{Simplified uncertainty.}
+The suite uses deterministic seeds and reporting perturbations rather than a
+full statistical survival model. A hardware study should report confidence
+bands, hazard estimates, and censoring uncertainty.
+
+\paragraph{Task parameters are stylized.}
+The task and drift parameters are chosen to cover a broad design space. Real
+robots may have nonstationary, multimodal, or operator-dependent drift that
+requires richer modeling.
+
+\paragraph{Cost is approximate.}
+Maintenance and evaluation cost are normalized proxies. Actual deployment cost
+depends on labor, downtime, hardware wear, safety requirements, and operator
+availability.
 
 \section{Conclusion}
-Robot skills should be reported as temporal objects. A skill is not only a success rate; it is a success rate that persists, decays, or recovers under deployment drift. Robot skill half-life gives that persistence a simple name and a reproducible measurement target.
 
-\begin{thebibliography}{9}
+Robot skills should be reported as temporal deployment objects. A manipulation
+policy is not only a day-zero success rate; it is a curve that persists,
+decays, recovers, or collapses under drift. Robot skill half-life gives that
+curve a simple diagnostic event time, but it is meaningful only with threshold,
+horizon, censoring, cadence, uncertainty, and cost. The v3 suite shows that
+these reporting details change the interpretation of frozen skills, calendar
+recalibration, triggered rehearsal, adaptive methods, human repair, overfit
+adaptation, and oracle maintenance. The practical recommendation is simple:
+when reporting a deployed robot skill, report how quickly it expires.
+
+\clearpage
+\appendix
+
+\section{Formal Details}
+
+\subsection{Observation Windows}
+
+Let $T$ be the observation horizon. The observed restricted lifetime is
+\[
+\tilde{H}_{\alpha,T}(\pi) =
+\begin{cases}
+\life{\alpha}(\pi), & \life{\alpha}(\pi) \leq T,\\
+T+1, & \life{\alpha}(\pi) > T \text{ or not observed.}
+\end{cases}
+\]
+The censoring flag is
+\[
+C_{\alpha,T}(\pi)=\mathbb{I}[\life{\alpha}(\pi)>T].
+\]
+The pair $(\tilde{H}_{\alpha,T}, C_{\alpha,T})$ is required. Reporting
+$\tilde{H}_{\alpha,T}=T+1$ without $C_{\alpha,T}=1$ invites the false reading
+that the skill has an infinite lifetime.
+
+\subsection{Cadence}
+
+Let observations occur at times $\mathcal{O}=\{0,c,2c,\ldots,T\}$. If the true
+crossing occurs at $t^\star$, the detected crossing is
+\[
+\hat{t}_c = \min \{ t \in \mathcal{O}: t \geq t^\star \}.
+\]
+The detection delay is $\hat{t}_c-t^\star$. This delay is not a property of the
+robot; it is a property of the reporting process. It must be disclosed.
+
+\subsection{Area Under the Success Curve}
+
+For sampled points $0=t_0<t_1<\cdots<t_m=T$, the normalized area is
+\[
+AUC = \frac{1}{T}\sum_{i=1}^{m}
+\frac{S(t_i)+S(t_{i-1})}{2}(t_i-t_{i-1}).
+\]
+This quantity prevents a policy that fails early and recovers late from looking
+identical to a policy that remains stable.
+
+\subsection{Uptime}
+
+For operational threshold $\beta$, uptime is
+\[
+U_\beta = \frac{1}{T}\int_0^T \mathbb{I}[S(t)\geq \beta]\,dt.
+\]
+In the suite we use $\beta=0.70$. Uptime is not a replacement for half-life.
+It is a complementary measure of how much of the deployment window is useful.
+
+\section{Skill Family Definitions}
+
+\paragraph{Bin picking.}
+Bin picking has high initial success and moderate drift. It is sensitive to
+clutter distribution and perception drift, but individual failures are often
+recoverable by regrasping or modest recalibration.
+
+\paragraph{Peg insertion.}
+Peg insertion is sensitive to fixture pose, compliance, tactile alignment, and
+contact geometry. Small shifts can turn a successful policy into one that jams
+or searches inefficiently.
+
+\paragraph{Cable routing.}
+Cable routing has high shock sensitivity because snag events, cable stiffness,
+and fixture geometry can change abruptly. Recovery requires more than a
+calendar reset.
+
+\paragraph{Drawer latch.}
+Drawer opening depends on latch wear, handle pose, friction, and the timing of
+force application. A policy can remain visually correct while losing the contact
+sequence needed to open the latch.
+
+\paragraph{Cloth folding.}
+Cloth folding has high compliance and object-distribution sensitivity. Fabric
+variation can produce nonmonotonic curves because some shifts make the task
+temporarily easier while others are destructive.
+
+\paragraph{Bottle cap twisting.}
+Bottle-cap twisting depends on friction, torque, cap geometry, and gripper wear.
+It stresses both force control and tactile feedback.
+
+\paragraph{In-hand rotation.}
+In-hand rotation is sensitive to tactile taxel wear, gripper pad wear, and
+object surface changes. A small slip-rate change can alter the entire policy.
+
+\paragraph{Suction picking.}
+Suction picking often begins with high success but can fail under seal
+degradation, dust, object curvature, or payload changes.
+
+\paragraph{Adhesive peeling.}
+Adhesive peeling is the hardest family in the suite because residue buildup,
+material variation, and contact history create compounding drift.
+
+\paragraph{Deformable packing.}
+Deformable packing stresses compliance and shape variation. Success depends on
+how the object deforms over repeated contact.
+
+\paragraph{Tool handoff.}
+Tool handoff includes human timing variation and safety constraints. A small
+shift in timing can turn a smooth transfer into a missed grasp.
+
+\paragraph{Force-controlled polishing.}
+Polishing depends on pad wear, surface condition, and force calibration. The
+policy can remain stable in pose while drifting in contact force.
+
+\paragraph{Pouring.}
+Pouring depends on payload mass, viscosity, container geometry, and timing.
+Success can degrade gradually as payload assumptions shift.
+
+\paragraph{Door handle turning.}
+Door handle turning combines alignment, torque, contact, and latch mechanics.
+It is a useful proxy for everyday manipulation that is robust until the fixture
+or handle wear changes.
+
+\section{Drift Process Definitions}
+
+\paragraph{Sensor bias drift.}
+Sensor bias slowly moves observations away from calibration. It often produces
+smooth decay and is relatively easy for self-calibration to address.
+
+\paragraph{Camera extrinsic drift.}
+Extrinsic drift changes the mapping between camera coordinates and robot
+coordinates. It can be gradual or shock-like after an accidental bump.
+
+\paragraph{Tactile taxel wear.}
+Taxel wear changes contact readings over time. It is especially harmful for
+in-hand manipulation, tactile servoing, and force-sensitive skills.
+
+\paragraph{Gripper pad wear.}
+Pad wear changes friction and compliance. It can produce slow decay followed by
+shock-like slip events.
+
+\paragraph{Object distribution shift.}
+Object distributions change in geometry, mass, material, and packaging. A
+policy can overfit to early objects and fail later.
+
+\paragraph{Fixture pose shift.}
+Fixtures move. The shift may be small enough to escape a static check and large
+enough to shorten a skill's lifetime.
+
+\paragraph{Payload mass shift.}
+Payload changes affect force, inertia, and timing. They are especially relevant
+for pouring, handoff, and grasp transport.
+
+\paragraph{Compliance drift.}
+Compliance drift changes deformation under contact. It damages policies that
+infer state from force or displacement.
+
+\paragraph{Lighting and perception drift.}
+Lighting drift is easier in this suite because robust visual policies and
+calibration can often compensate. It is still a necessary reporting condition.
+
+\paragraph{Friction and humidity drift.}
+Friction and humidity produce the hardest average lifetime in the suite. Their
+effects interact with gripper wear, material, slip, and contact force.
+
+\paragraph{Controller latency drift.}
+Latency drift affects timing-sensitive skills. It can be invisible in static
+state evaluations but harmful in closed-loop contact.
+
+\paragraph{Compound drift with shocks.}
+Compound drift combines gradual change with multiple shock events. It is the
+stress test for claims about deployed robustness.
+
+\section{Policy Definitions}
+
+\paragraph{Frozen skill.}
+The frozen policy performs no maintenance. It is cheap and reproducible but
+expires quickly.
+
+\paragraph{Calendar recalibration.}
+Calendar recalibration updates on a fixed schedule. It helps smooth drift but
+can miss sudden shocks.
+
+\paragraph{Sentinel-triggered rehearsal.}
+Sentinel rehearsal responds to observed degradation. It links maintenance to
+evidence rather than the calendar.
+
+\paragraph{Adaptive recalibration.}
+Adaptive recalibration adjusts calibration state in response to changing
+observations. It is stronger than calendar recalibration but still limited.
+
+\paragraph{Uncertainty-triggered rehearsal.}
+Uncertainty rehearsal uses uncertainty signals to decide when rehearsal is
+needed. It improves lifetime but pays monitoring cost.
+
+\paragraph{Continual fine-tuning.}
+Continual fine-tuning adapts online. It can help but may carry overfit and
+evaluation burden.
+
+\paragraph{Domain-randomized robust policy.}
+Domain randomization tries to make the initial policy robust. It lowers shock
+sensitivity but cannot repair after large unmodeled changes.
+
+\paragraph{Ensemble gating.}
+Ensemble gating monitors disagreement and gates risky actions. It helps detect
+drift but does not itself repair all causes.
+
+\paragraph{Conservative fallback.}
+Fallback reduces risk by choosing conservative actions. It can protect against
+some shocks but often sacrifices throughput and does not recover the main skill.
+
+\paragraph{Active evaluation scheduling.}
+Active evaluation spends measurement budget to observe likely failures. It
+reduces hidden failure but does not guarantee long half-life.
+
+\paragraph{Human-in-loop repair.}
+Human repair is strong and expensive. It is a realistic upper-midpoint for
+deployments where operator intervention is available.
+
+\paragraph{Meta-adaptation.}
+Meta-adaptation is a proxy for policies trained to adapt quickly to new drift
+conditions.
+
+\paragraph{Self-calibration.}
+Self-calibration corrects sensor or control mappings without full retraining.
+It is especially useful for smooth calibration drift.
+
+\paragraph{Tactile servo refresh.}
+Tactile servo refresh updates contact servoing around tactile changes. It is
+strong for contact-heavy tasks but pays monitoring and maintenance cost.
+
+\paragraph{Overfit rapid adaptation.}
+Overfit rapid adaptation is a negative control. It reacts quickly and can delay
+the half-success crossing, but a late penalty harms long-horizon success.
+
+\paragraph{Oracle maintenance.}
+Oracle maintenance is an upper bound with privileged knowledge of drift. It is
+included to show the maximum possible lifetime under the suite, not as a
+deployable policy.
+
+\section{Data Schema}
+
+\subsection{Seed Rows}
+
+\path{results/full_scale/seed_survival_metrics.csv} contains one row per
+skill-drift-policy-seed combination. The columns are:
+\begin{itemize}
+    \item \texttt{skill}, \texttt{drift}, \texttt{policy}, \texttt{policy\_class}, and \texttt{seed};
+    \item \texttt{initial\_success}, \texttt{h50}, \texttt{h80}, \texttt{censored50}, and \texttt{censored80};
+    \item \texttt{day60}, \texttt{day120}, \texttt{day180}, and \texttt{day240};
+    \item \texttt{auc}, \texttt{uptime70}, \texttt{maintenance\_cost}, and \texttt{evaluation\_cost};
+    \item \texttt{shock\_loss}, \texttt{recovery\_lag}, \texttt{hazard\_proxy},
+    \texttt{nonmonotonic\_index}, and \texttt{durability\_score}.
+\end{itemize}
+
+\subsection{Aggregate Rows}
+
+\path{results/full_scale/aggregate_survival_metrics.csv} aggregates over seeds for
+each skill-drift-policy group. It is the source for most manuscript tables and
+figures. The aggregate row count is 2,688.
+
+\subsection{Stress Files}
+
+\path{threshold_sensitivity.csv} stores threshold and horizon summaries.
+\path{cadence_sensitivity.csv} stores detection delay under 1-, 7-, 14-, and
+30-day cadence. \path{shock_recovery_metrics.csv} stores policy-by-drift recovery
+statistics. \path{representative_decay_curve.csv} stores the daily curves used in
+Figure~\ref{fig:representative-curves}.
+
+\section{Additional Failure Modes}
+
+\paragraph{Half-life can reward overfit adaptation.}
+The overfit rapid adaptation policy improves early threshold crossing compared
+with frozen and calendar baselines. But its day-240 success is only 0.107. A
+half-life-only report can therefore reward a policy that is not desirable over
+the full horizon.
+
+\paragraph{Censoring can hide ranking differences.}
+Oracle maintenance is fully censored at the half-success threshold. That is not
+evidence that every oracle-maintained skill will last forever. It is evidence
+that the 240-day horizon was insufficient to observe the event.
+
+\paragraph{Sparse cadence is an operational risk.}
+Monthly evaluation delays failure detection by roughly 15 to 18 days for many
+policies. In safety-critical settings, that delay may be unacceptable even when
+the estimated half-life is long.
+
+\paragraph{Low shock loss is not always enough.}
+A method can reduce the immediate shock drop but fail to recover afterward.
+Shock loss and recovery lag must be reported together.
+
+\paragraph{Low cost is not always good.}
+Frozen and conservative policies are cheap, but their uptime and late success
+are poor. A low-maintenance policy is attractive only if it also maintains
+usable performance.
+
+\section{Recommended Reporting Checklist}
+
+A robot skill half-life report should include:
+\begin{enumerate}
+    \item Skill family and success definition.
+    \item Drift process and how it is induced or measured.
+    \item Initial success distribution.
+    \item Full decay curve or sampled curve points.
+    \item Threshold fraction or fractions.
+    \item Observation horizon.
+    \item Censoring rule and censoring fraction.
+    \item Evaluation cadence and detection delay.
+    \item Maintenance policy and maintenance cost.
+    \item Evaluation cost and downtime.
+    \item Shock events and recovery lag.
+    \item Uncertainty intervals or seed variation.
+    \item Negative controls such as frozen or overfit adaptation.
+    \item Hardware or simulator limitations.
+\end{enumerate}
+
+\section{Hardware Deployment Plan}
+
+The analytic suite suggests a hardware protocol. Choose a small number of
+skills, such as peg insertion, suction picking, and drawer opening. Install each
+skill after calibration and record $S(0)$. Define drift processes: deliberate
+camera perturbation, gripper pad wear, object distribution shift, and fixture
+pose shift. Evaluate at a fixed cadence, for example daily or every 100 cycles.
+Run frozen, calendar recalibration, sentinel rehearsal, and a stronger adaptive
+method. Report $\life{0.8}$, $\half$, $S(60)$, AUC, uptime, maintenance cost,
+shock loss, recovery lag, and censoring. Do not collapse the study to one final
+success rate.
+
+\section{Reviewer Attack Responses}
+
+\paragraph{Attack: half-life is arbitrary.}
+Response: the threshold is arbitrary if hidden. It is useful if reported and
+stressed. The paper reports 80\%, 70\%, 50\%, and 30\% thresholds and shows
+that they answer different questions.
+
+\paragraph{Attack: this is just survival analysis.}
+Response: yes, deliberately. The contribution is to import survival-reporting
+discipline into robot skill evaluation and to specify the robotics quantities
+that must accompany the event time: drift process, cadence, maintenance policy,
+and evaluation cost.
+
+\paragraph{Attack: the suite is analytic, not real hardware.}
+Response: correct. The paper does not claim hardware lifetimes. It claims that
+static success reporting is insufficient and provides a full stress suite to
+define the reporting problem.
+
+\paragraph{Attack: oracle maintenance dominates.}
+Response: oracle maintenance is an upper bound. It is included to show the gap
+between realistic policies and privileged maintenance, not as a proposed
+deployment method.
+
+\paragraph{Attack: cost weights are subjective.}
+Response: the durability score is not a universal objective. The raw table
+reports half-life, censoring, day-240 success, AUC, cost, shock loss, and
+recovery lag so users can apply different weights.
+
+\paragraph{Attack: real skill curves may be nonmonotonic.}
+Response: the suite includes shock recovery and nonmonotonic behavior. The
+metric does not require monotonicity; it requires a clear event definition and
+the full curve.
+
+\section{Extended Policy-by-Policy Findings}
+
+\paragraph{Frozen skill.}
+Frozen skill is the required negative baseline. It has no maintenance cost, but
+the mean half-life is only 39.6 days and the day-240 success is 0.014. This is
+the central warning for static reporting: a skill can be excellent at
+installation and practically gone by the end of the deployment window. Frozen
+skill is not a straw man; many deployed policies are effectively frozen between
+software releases, calibrations, or scheduled service visits.
+
+\paragraph{Calendar recalibration.}
+Calendar recalibration improves mean half-life to 59.1 days while keeping cost
+low. It is the simplest maintenance policy that a deployment team can schedule.
+Its weakness is event timing. If a fixture shifts one day after recalibration,
+the policy can remain degraded until the next scheduled service. The suite
+therefore treats calendar recalibration as a useful but incomplete baseline.
+
+\paragraph{Sentinel rehearsal.}
+Sentinel rehearsal links maintenance to degradation evidence. It reaches 70.6
+days and improves shock recovery compared with calendar recalibration. The
+important result is not that sentinel rehearsal is optimal. It is that a
+triggered policy changes the shape of the success curve: decay is interrupted
+by partial recovery events, so final success and initial success are both poor
+summaries.
+
+\paragraph{Adaptive recalibration.}
+Adaptive recalibration reaches 81.8 days. It represents methods that continuously
+update calibration state rather than waiting for a calendar interval. The
+improvement over sentinel rehearsal is modest in the suite because some drift
+processes are not calibration errors. This is a useful diagnostic distinction:
+if adaptive calibration does not move the half-life under a drift process, the
+drift is probably not being captured by the calibration state.
+
+\paragraph{Uncertainty-triggered rehearsal.}
+Uncertainty rehearsal reaches 101.7 days. It spends more monitoring budget than
+sentinel rehearsal, but it detects some failures earlier. This policy motivates
+joint reporting of lifetime and evaluation cost. Without the cost column, the
+policy looks strictly better. With cost, it is one point on a frontier.
+
+\paragraph{Continual fine-tuning.}
+Continual fine-tuning reaches 67.8 days in the suite, lower than several
+triggered and calibration policies. This is intentional: an online learner can
+adapt to drift while also consuming evaluation budget and accumulating
+instability. A paper that reports only final adapted success can hide that
+maintenance burden.
+
+\paragraph{Domain-randomized policy.}
+Domain randomization is a front-loaded robustness strategy. It reaches 57.3
+days, slightly below calendar recalibration. This does not mean domain
+randomization is weak in general. It means that robustness at deployment time
+does not replace reporting of time-to-failure under the actual drift process.
+Robustness widens the initial basin; it may not repair a skill after unmodeled
+shock events.
+
+\paragraph{Ensemble gating.}
+Ensemble gating reaches 62.6 days. It monitors disagreement and can avoid some
+risky actions, but monitoring is not the same as repair. In safety-sensitive
+deployments, gating may be valuable even if the half-life does not dominate,
+because avoiding unsafe action can matter more than maximizing success.
+
+\paragraph{Conservative fallback.}
+Conservative fallback reaches 53.5 days. It is cheap and can reduce immediate
+risk, but it does not restore the main skill. This is an example where a policy
+can be operationally sensible without being a strong lifetime extender. The
+reporting protocol should let readers see both facts.
+
+\paragraph{Active evaluation.}
+Active evaluation reaches 58.6 days. It pays a high evaluation cost because it
+looks for likely failure regions. The benefit is not only a longer half-life;
+it is lower uncertainty about when the event occurred. That benefit is not
+visible unless cadence and detection delay are reported.
+
+\paragraph{Human-in-loop repair.}
+Human repair reaches 168.5 days and has the strongest non-oracle lifetime. It
+also carries the largest realistic maintenance cost. The right conclusion is
+not that every robot should use human repair. The right conclusion is that a
+long lifetime report should say who or what performed the repair and how much
+downtime or labor it required.
+
+\paragraph{Meta-adaptation.}
+Meta-adaptation reaches 128.6 days, a strong automated result in the suite. It
+is the main positive analytic finding: training for rapid adaptation can buy
+deployment time under many drift families. The remaining gap to human repair
+and oracle maintenance shows that adaptation is not free robustness.
+
+\paragraph{Self-calibration.}
+Self-calibration reaches 84.8 days. It is strongest under sensor, camera, and
+controller drift and weaker under object, friction, or compliance shifts. This
+pattern is exactly why the drift process must be named. A single lifetime
+number averaged over hidden drift mixes mechanisms that a robot engineer would
+not treat as equivalent.
+
+\paragraph{Tactile servo refresh.}
+Tactile servo refresh reaches 107.9 days. It performs well on contact-heavy
+families because it updates the contact control loop instead of only visual or
+state calibration. Its cost and monitoring burden are higher than simple
+recalibration, so it should be reported as a contact-specific maintenance
+strategy rather than a universal upgrade.
+
+\paragraph{Overfit rapid adaptation.}
+Overfit rapid adaptation reaches 86.0 days, beating several reasonable
+baselines on half-life, but day-240 success falls to 0.107. This is the most
+important negative control. It shows that a policy can game or accidentally
+optimize the crossing time while leaving poor long-horizon behavior. This is
+why half-life must be paired with AUC, final success, and shock recovery.
+
+\paragraph{Oracle maintenance.}
+Oracle maintenance is censored at 241.0 days under half-success and has
+day-240 success 0.610. It is not a deployable policy; it is a measurement upper
+bound. The gap between oracle maintenance and realistic policies estimates how
+much lifetime is lost because the system does not know the drift process or the
+right repair time.
+
+\section{Extended Stress-Test Interpretation}
+
+\paragraph{Threshold stress.}
+The 80\% threshold is an early-warning measure. It asks when the skill first
+loses a noticeable fraction of its original reliability. The half-success
+threshold asks when the skill has clearly expired under a stricter operational
+definition. The 30\% threshold asks about catastrophic persistence. A robot
+paper should choose the threshold that matches the application and should
+report at least one sensitivity check. A warehouse sorter may care about
+half-success; a surgical or collaborative robot may care about a much stricter
+threshold.
+
+\paragraph{Horizon stress.}
+Observation horizon determines whether crossings are observed or censored. A
+60-day deployment study can make a policy look durable simply because the study
+ended early. A 240-day study can reveal the same policy's crossing. The correct
+practice is to state the horizon and censoring fraction, then avoid language
+such as ``does not fail'' unless the study truly supports it.
+
+\paragraph{Cadence stress.}
+Cadence is a reporting intervention. If the operator checks performance every
+day, the detected crossing is close to the true crossing. If the operator checks
+monthly, a policy can operate below threshold for weeks before the report
+notices. Sparse cadence is especially dangerous for shock-driven drift because
+the event may occur shortly after a check.
+
+\paragraph{Drift stress.}
+The drift table shows that friction/humidity and compound shock regimes are
+harder than lighting or sensor bias. This means benchmark choice can change the
+reported half-life as much as method choice. A lifetime number without a named
+drift process is therefore closer to a slogan than a measurement.
+
+\paragraph{Cost stress.}
+Cost stress distinguishes operationally different policies with similar
+lifetimes. Human repair and oracle maintenance buy time by spending maintenance
+resources. Frozen and calendar policies are cheap but less durable. Triggered
+policies occupy the middle. A deployment report should let a reader choose a
+different cost weighting instead of hiding cost inside a single score.
+
+\paragraph{Shock stress.}
+Shock loss and recovery lag expose a failure mode that smooth exponential
+curves hide. A policy can have a respectable average decay rate and still fail
+badly after a fixture shift or payload change. The shock recovery table should
+therefore accompany any half-life report in contact-rich manipulation.
+
+\paragraph{Nonmonotonic recovery.}
+Real deployments can recover after service, improve after adaptation, or
+temporarily benefit from easier objects. The half-life event remains well
+defined for nonmonotonic curves, but the event is no longer a sufficient
+summary. Once a curve crosses the threshold, the report should still show
+whether it recovered and how long recovery took.
+
+\section{Survival-Analysis Bridge For Hardware Studies}
+
+\paragraph{Kaplan-Meier view.}
+In a hardware study, each robot run, object stream, or deployment cell can be
+treated as a unit with an event time: the first time its success estimate falls
+below threshold. Runs that do not cross before the study ends are censored.
+The Kaplan-Meier estimator can then report a survival curve over skill
+instances. The analytic suite does not estimate such a curve, but it produces
+the fields a hardware study would need.
+
+\paragraph{Hazard view.}
+Hazard asks how likely the skill is to expire at time $t$ given that it has not
+expired earlier. This is useful when drift is not smooth. For example, gripper
+pad wear may have low early hazard and high late hazard, while fixture shocks
+may create sudden hazard spikes. A half-life report can be paired with a hazard
+plot when enough hardware runs are available.
+
+\paragraph{Competing risks.}
+A deployed skill can expire for multiple reasons: sensor drift, object drift,
+hardware wear, operator change, software update, or safety shutdown. Hardware
+studies should tag the likely cause of threshold crossing. A single half-life
+number is weaker if it mixes incompatible failure modes.
+
+\paragraph{Interval censoring.}
+If a robot is evaluated weekly, the exact crossing time is only known to lie
+between two evaluations. A rigorous hardware report should treat that as
+interval censoring rather than pretending the crossing happened exactly at the
+later evaluation. The cadence stress in this paper is a deterministic version
+of that issue.
+
+\paragraph{Measurement noise.}
+Success probability is estimated from finite trials. A hardware protocol should
+define the number of trials per evaluation point and the confidence rule for
+declaring a threshold crossing. Without this rule, noise can create artificial
+crossings or hide real decay.
+
+\paragraph{Maintenance as treatment.}
+Maintenance changes the survival process. If a policy is repaired after a
+sentinel warning, the report should treat repair as part of the policy, not as
+an external nuisance. Otherwise the reported lifetime cannot be reproduced.
+
+\paragraph{Ethics and safety.}
+For safety-critical tasks, it may be unacceptable to wait until half-success is
+crossed. In such settings, $\life{0.9}$ or a task-specific safety threshold is
+more appropriate. The half-life name should not force the 50\% threshold onto
+applications where a smaller degradation is already unsafe.
+
+\section{Operator-Facing Report Template}
+
+A deployment operator should be able to read the following fields without
+opening the code:
+\begin{enumerate}
+    \item Skill name, robot platform, tool, object family, and environment.
+    \item Success definition, safety definition, and number of trials per check.
+    \item Initial success and uncertainty.
+    \item Drift process or natural deployment period.
+    \item Evaluation cadence and missed-check policy.
+    \item Maintenance policy, including who or what triggers repair.
+    \item Threshold fractions reported, including the operational threshold.
+    \item Half-life and censoring flag for each threshold.
+    \item Full decay curve or enough points to reconstruct it.
+    \item Day-60, day-120, day-180, and day-240 success when applicable.
+    \item Shock events, immediate loss, and recovery lag.
+    \item Evaluation cost, maintenance cost, downtime, and human labor.
+    \item Known limitations and expected failure modes.
+    \item Whether the policy was updated during deployment.
+    \item Whether the report is hardware, high-fidelity simulation, or analytic.
+\end{enumerate}
+
+This template is deliberately operational. A method paper can include more
+theory, but a deployment report must answer the practical question: when should
+the operator stop trusting the skill, and what is the cost of keeping it alive?
+
+\section{Audit Of Claims}
+
+\paragraph{Claim supported.}
+Static initial success does not identify deployment lifetime. The formal
+proposition proves this for simple exponential curves, and the full suite shows
+the same issue across many nontrivial policies and drifts.
+
+\paragraph{Claim supported.}
+Threshold, horizon, censoring, and cadence can change the interpretation of a
+reported lifetime. Tables~\ref{tab:threshold} and~\ref{tab:cadence} directly
+support this claim.
+
+\paragraph{Claim supported.}
+Maintenance policies trade off lifetime, recovery, cost, and evaluation burden.
+Tables~\ref{tab:policy-summary}, \ref{tab:cost}, and \ref{tab:shock} support
+this claim.
+
+\paragraph{Claim not made.}
+The paper does not claim that the analytic half-lives transfer numerically to
+real robots. The suite is a reporting stress test, not a physical deployment
+measurement.
+
+\paragraph{Claim not made.}
+The paper does not claim that robot skills always decay monotonically. The
+diagnostic permits nonmonotonic recovery, and the appendices explain why the
+full curve must be reported.
+
+\paragraph{Claim not made.}
+The paper does not claim that a half-life scalar replaces task success,
+adaptation metrics, safety metrics, or economic analysis. It claims that the
+time axis must be included in reports of deployed skills.
+
+\section{Data-Generating Process Details}
+
+\subsection{Success Curve Components}
+
+Each analytic success curve is built from five components. The first component
+is an initial success level $s_0$ determined by the skill family and seed. The
+second is a floor $s_{\min}$ that prevents the curve from becoming negative.
+The third is an exponential decay term controlled by skill sensitivity, drift
+rate, and policy age:
+\[
+S_{\text{base}}(t)=s_{\min} + (s_0-s_{\min})\exp(-\lambda_{k,d} a_p(t)).
+\]
+Here $k$ indexes the skill, $d$ indexes the drift process, $p$ indexes the
+maintenance policy, and $a_p(t)$ is the policy-specific effective age. Frozen
+skills have effective age close to calendar time. Calendar policies partly
+reset effective age. Triggered and adaptive policies reduce effective age after
+maintenance events. Oracle maintenance uses a privileged low effective age.
+
+The fourth component is shock loss. Each drift process has shock days
+$\tau_j$ and a shock magnitude. For $t\geq \tau_j$, the curve receives a
+transient loss and a persistent loss. Maintenance policies reduce these losses
+according to their shock-mitigation parameter. This creates abrupt drops in the
+curve and makes recovery lag meaningful.
+
+The fifth component is recovery and monitoring. Triggered, adaptive, repair,
+and oracle policies add a delayed recovery term after shock events. Monitoring
+policies add a small improvement from earlier detection. Overfit rapid
+adaptation receives an early recovery benefit and a late overfit penalty. These
+terms create nonmonotonic curves without changing the definition of the
+threshold crossing.
+
+\subsection{Why The Suite Uses Analytic Curves}
+
+A hardware suite with 14 skills, 12 drift processes, 16 policies, 112 seeds,
+241 days, and multiple thresholds would be expensive and slow. The analytic
+suite is not a substitute for such a study. It is a way to test the reporting
+logic at full scale before hardware evidence exists. Because the curves are
+deterministic, every table is reproducible and every failure mode can be traced
+to a known component: decay, shock, recovery, cadence, cost, or censoring.
+
+This choice also makes the suite RAM-light. The runner does not store dense
+daily trajectories for every seed. It computes compact summaries, streams seed
+rows to disk, and keeps only aggregate accumulators. The represented count
+therefore measures reporting checks, not memory footprint.
+
+\subsection{Restricted Half-Life Approximation}
+
+The runner evaluates compact sampled curves and interpolates threshold
+crossings between sampled points. This is appropriate for the suite because the
+goal is robust policy ranking and reporting stress, not sub-day crossing
+precision. A hardware deployment should use the actual evaluation cadence and
+should treat crossing time as interval-censored when checks are sparse.
+
+\subsection{Durability Score Interpretation}
+
+The durability score is intentionally transparent. It rewards half-life, AUC,
+and uptime, and penalizes maintenance cost, evaluation cost, shock loss, and
+recovery lag. It is not a universal objective. A safety-critical application
+might assign much larger penalty to shock loss. A warehouse application might
+assign larger penalty to downtime. A lab benchmark might ignore human labor.
+The raw columns are therefore more important than the score.
+
+\subsection{Why Multiple Thresholds Are Required}
+
+Different thresholds ask different deployment questions. $\life{0.8}$ asks
+when the policy first loses quality. $\life{0.5}$ asks when the policy has
+lost half of its original success. $\life{0.3}$ asks when only a residual skill
+remains. A single threshold can be defended only if the application tells us
+why that threshold is operationally meaningful. The suite reports multiple
+thresholds because reviewers should not have to infer this from one scalar.
+
+\section{Scenario Case Studies}
+
+\subsection{Peg Insertion Under Compound Drift}
+
+Peg insertion under compound drift is the representative hard case used in
+Figure~\ref{fig:representative-curves}. The skill begins with high success
+because the peg, hole, and controller are calibrated. A first shock shifts the
+fixture. A second shock changes compliance. A third shock appears late in the
+deployment window. Frozen skill decays quickly because every shift increases
+contact error. Calendar recalibration partially resets the fixture error but
+can be out of phase with shocks. Sentinel and uncertainty rehearsal recover
+some performance after warnings. Overfit adaptation reacts early but loses late
+success. Oracle maintenance uses privileged timing and remains high. This case
+illustrates why shock recovery and cadence must be reported together.
+
+\subsection{Suction Picking Under Lighting Drift}
+
+Suction picking under lighting and perception drift is easier. The skill starts
+high, and the drift process has lower shock scale. Calendar recalibration and
+domain-randomized policies look relatively strong because the main degradation
+is perceptual. This case warns against overgeneralizing from one drift process.
+A method that is excellent under lighting drift may not survive tactile wear or
+friction changes.
+
+\subsection{Adhesive Peeling Under Friction And Humidity Drift}
+
+Adhesive peeling under friction and humidity drift is a hard case. Residue,
+surface condition, and material response compound over time. The decay curve is
+not only a sensor-calibration issue; it is a changing contact process. Simple
+calendar recalibration has limited effect. Tactile servo refresh and
+meta-adaptation do better because they respond to contact dynamics. Human repair
+is strong because it can reset the physical setup, but its cost is high. This
+case motivates including physical maintenance in the report rather than
+treating all adaptation as software.
+
+\subsection{Tool Handoff Under Human Timing Variation}
+
+Tool handoff highlights another reporting issue: the drift process can come
+from another agent. Human timing variation changes when the robot should close
+the gripper, how quickly it should yield, and what safety margin is acceptable.
+Static success on scripted handoffs does not predict long-horizon deployment
+with changing partners. In this case, ensemble gating and active evaluation can
+be useful even when they do not dominate half-life, because detecting uncertain
+handoffs is operationally valuable.
+
+\subsection{Door Handle Turning Under Fixture Pose Shift}
+
+Door handle turning is a moderate case. Fixture pose shift can be handled by
+calibration up to a point, but latch mechanics and torque requirements can
+change with wear. Self-calibration and calendar recalibration help early;
+adaptive methods help after repeated shifts. The case illustrates why the same
+skill may require both geometric and force-based reporting.
+
+\section{Reviewer Checklist For Half-Life Claims}
+
+\paragraph{Check the event definition.}
+Does the paper define the success threshold, the initial success estimate, and
+the exact crossing rule? If not, the reported lifetime is ambiguous.
+
+\paragraph{Check censoring.}
+Does every lifetime table include a censoring flag or censoring fraction? If a
+paper reports a horizon-limited value without censoring, it may be overstating
+durability.
+
+\paragraph{Check the curve.}
+Is the full decay curve shown, or at least enough sampled points to understand
+failure and recovery? A scalar without a curve should be treated as incomplete.
+
+\paragraph{Check cadence.}
+How often was success measured? Sparse cadence can delay crossing detection and
+inflate apparent lifetime.
+
+\paragraph{Check drift process.}
+What changed during deployment? Sensor drift, object drift, fixture drift,
+friction drift, and human timing drift are different stressors. A lifetime
+without a named drift process is not reproducible.
+
+\paragraph{Check maintenance.}
+Was the policy frozen, recalibrated, adapted, repaired, or replaced? A
+half-life number is not comparable across papers if one policy receives
+maintenance and another does not.
+
+\paragraph{Check cost.}
+How much evaluation, downtime, compute, human labor, or hardware replacement was
+needed? A long lifetime can be operationally weak if it requires excessive
+maintenance.
+
+\paragraph{Check negative controls.}
+Does the paper include frozen, calendar, and overfit or excessive-adaptation
+controls? Without negative controls, it is hard to know whether the reported
+lifetime is meaningful.
+
+\paragraph{Check threshold sensitivity.}
+Does the method still look strong under a stricter threshold? If the ranking
+changes sharply, the paper should explain which threshold matters for the task.
+
+\paragraph{Check final-window behavior.}
+Does the policy remain useful at the end of the window, or did it merely delay
+the crossing? Day-240 success and AUC help answer this.
+
+\paragraph{Check shocks.}
+Were abrupt shifts tested? If not, the reported half-life may describe smooth
+drift only.
+
+\paragraph{Check transfer claims.}
+Does the paper claim hardware durability from simulation or analytic curves?
+If so, the claim should be narrowed or supported by real deployment data.
+
+\section{Reproducibility}
+
+The full-scale suite is generated by:
+\begin{verbatim}
+python scripts/run_full_scale_skill_half_life_suite.py
+\end{verbatim}
+The final PDF is exported by:
+\begin{verbatim}
+powershell -ExecutionPolicy Bypass -File scripts/build_pdf.ps1
+\end{verbatim}
+The runner writes validation metadata to
+\path{results/full_scale/experiment_validation.json}. The final artifact validation
+is recorded separately after the canonical Downloads PDF is built and visually
+checked.
+
+\section{Release Audit}
+
+The final release should contain the manuscript source, the full-scale runner,
+CSV results, JSON summaries, LaTeX table snippets, PDF figures, execution plan,
+and validation files. The canonical PDF is
+\path{C:/Users/wangz/Downloads/39.pdf}. Local \path{main.pdf} must be absent after the
+canonical build. The final PDF must be rendered to PNGs and inspected before
+the repository is committed and pushed.
+
+\begin{thebibliography}{20}
+\bibitem[Andrychowicz et~al.(2020)]{andrychowicz2020learning}
+OpenAI, Ilge Akkaya, Marcin Andrychowicz, et~al. Learning dexterous in-hand
+manipulation. \emph{The International Journal of Robotics Research}, 2020.
+
+\bibitem[Chebotar et~al.(2019)]{chebotar2019closing}
+Yevgen Chebotar, Ankur Handa, Viktor Makoviychuk, et~al. Closing the sim-to-real
+loop: Adapting simulation randomization with real world experience. In
+\emph{ICRA}, 2019.
+
+\bibitem[Cox(1972)]{cox1972regression}
+David R. Cox. Regression models and life-tables. \emph{Journal of the Royal
+Statistical Society: Series B}, 1972.
+
+\bibitem[Duan et~al.(2016)]{duan2016rl2}
+Yan Duan, John Schulman, Xi Chen, Peter L. Bartlett, Ilya Sutskever, and Pieter
+Abbeel. RL2: Fast reinforcement learning via slow reinforcement learning.
+\emph{arXiv preprint arXiv:1611.02779}, 2016.
+
 \bibitem[Finn et~al.(2017)]{finn2017maml}
-Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In \emph{ICML}, 2017.
+Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for
+fast adaptation of deep networks. In \emph{ICML}, 2017.
 
-\bibitem[Jeong et~al.(2020)]{jeong2020sim2real}
-Rae Jeong, Yusuf Aytar, et~al. Self-supervised sim-to-real adaptation for visual robotic manipulation. In \emph{ICRA}, 2020.
+\bibitem[Kalashnikov et~al.(2018)]{kalashnikov2018qtopt}
+Dmitry Kalashnikov, Alex Irpan, Peter Pastor, et~al. QT-Opt: Scalable deep
+reinforcement learning for vision-based robotic manipulation. In \emph{CoRL},
+2018.
+
+\bibitem[Kaplan and Meier(1958)]{kaplan1958nonparametric}
+Edward L. Kaplan and Paul Meier. Nonparametric estimation from incomplete
+observations. \emph{Journal of the American Statistical Association}, 1958.
 
 \bibitem[Kirkpatrick et~al.(2017)]{kirkpatrick2017ewc}
-James Kirkpatrick et~al. Overcoming catastrophic forgetting in neural networks. \emph{PNAS}, 2017.
+James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, et~al. Overcoming
+catastrophic forgetting in neural networks. \emph{PNAS}, 2017.
+
+\bibitem[Kleinbaum and Klein(2012)]{kleinbaum2012survival}
+David G. Kleinbaum and Mitchel Klein. \emph{Survival Analysis: A Self-Learning
+Text}. Springer, 2012.
+
+\bibitem[Levine et~al.(2016)]{levine2016endtoend}
+Sergey Levine, Peter Pastor, Alex Krizhevsky, Julian Ibarz, and Deirdre Quillen.
+Learning hand-eye coordination for robotic grasping with deep learning and large
+scale data collection. \emph{The International Journal of Robotics Research},
+2016.
+
+\bibitem[Meeker and Escobar(1998)]{meeker1998statistical}
+William Q. Meeker and Luis A. Escobar. \emph{Statistical Methods for Reliability
+Data}. Wiley, 1998.
+
+\bibitem[OpenAI et~al.(2019)]{openai2019solving}
+OpenAI, Ilge Akkaya, Marcin Andrychowicz, et~al. Solving Rubik's Cube with a
+robot hand. \emph{arXiv preprint arXiv:1910.07113}, 2019.
+
+\bibitem[Peng et~al.(2018)]{peng2018simtoreal}
+Xue Bin Peng, Marcin Andrychowicz, Wojciech Zaremba, and Pieter Abbeel.
+Sim-to-real transfer of robotic control with dynamics randomization. In
+\emph{ICRA}, 2018.
 
 \bibitem[Rusu et~al.(2016)]{rusu2016progressive}
-Andrei A. Rusu et~al. Progressive neural networks. \emph{arXiv preprint arXiv:1606.04671}, 2016.
+Andrei A. Rusu, Neil C. Rabinowitz, Guillaume Desjardins, et~al. Progressive
+neural networks. \emph{arXiv preprint arXiv:1606.04671}, 2016.
 \end{thebibliography}
 
 \end{document}

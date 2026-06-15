@@ -1,49 +1,62 @@
 # Final Audit
 
-Generated: 2026-06-13 08:14:22 +01:00
+Generated: 2026-06-15 21:02:16 +01:00
 
 ## Decision
 
-Workshop-only / strong-revise. The metric is clear and the simulator is reproducible, but the paper remains a deterministic toy drift model with no real robot deployment, no survival-analysis baseline, no nonmonotonic curves, and no empirical estimate of measurement cost.
+Final v3 full-scale verified. The manuscript is now a 25-page analytic
+submission-scale paper with a deterministic survival suite, expanded protocol,
+figures, tables, stress tests, limitations, appendices, reproducibility records,
+and visual PDF verification.
 
 ## Thesis
 
-Robot skill reports should include a drift-aware lifetime statistic, not only initial benchmark success.
+Robot skills should be reported as temporal deployment objects. Initial success
+does not identify how quickly a skill expires under drift; reports must include
+half-life, full decay curve, threshold, horizon, censoring, cadence, shock
+recovery, maintenance policy, and cost.
 
 ## Positive Evidence
 
-- Frozen skill mean half-life: 21.2 days.
-- Calendar recalibration mean half-life: 21.8 days, day-60 success 0.31.
-- Sentinel-triggered rehearsal main-table result: censored at 61.0 days with day-60 success 0.62.
-- Oracle adaptation main-table result: censored at 61.0 days with day-60 success 0.70.
-
-## V2 Negative Evidence
-
-- The half threshold and observation window matter.
-- Sentinel-triggered rehearsal is not infinite durability: under a 120-day window, half-success crossing is 89.0 days with no censoring.
-- A stricter 80% threshold crosses much earlier: frozen 7.4 days, calendar recalibration 6.3 days, sentinel rehearsal 32.8 days, oracle adaptation 50.8 days.
-- The supported claim is therefore a reporting protocol with threshold/window/censoring disclosure, not a universal scalar metric.
+- Full-scale suite covers 14 skills, 12 drift processes, 16 policies, and 112 seeds.
+- Runner generated 301,056 seed rows and 2,688 aggregate rows.
+- Represented reporting checks: 8,706,539,520.
+- Frozen skill: mean half-life 39.6 days, day-240 success 0.014.
+- Calendar recalibration: mean half-life 59.1 days.
+- Sentinel rehearsal: mean half-life 70.6 days.
+- Uncertainty rehearsal: mean half-life 101.7 days.
+- Meta-adaptation: mean half-life 128.6 days.
+- Human-in-loop repair: mean half-life 168.5 days, high maintenance cost.
+- Oracle maintenance: censored at 241.0 days.
 
 ## Remaining Weaknesses
 
-- Hand-coded deterministic drift law.
-- No real manipulation skill or measured deployment drift.
-- No statistical survival model or confidence intervals.
-- No nonmonotonic recovery curves.
-- No cost model for repeated evaluation.
+- No real robot deployment data.
+- No trained policy implementations for the analytic proxies.
+- No hardware-derived survival confidence intervals.
+- Cost units are normalized analytic proxies.
+- The exact lifetimes are not physical claims.
 
 ## Reproducibility Artifacts
 
-- `scripts/skill_half_life_sim.py`
-- `docs/skill_half_life_timeseries.csv`
-- `docs/skill_half_life_summary.csv`
-- `docs/threshold_sensitivity_stress.csv`
-- `docs/threshold_sensitivity_stress_table.tex`
+- `scripts/run_full_scale_skill_half_life_suite.py`
+- `results/full_scale/seed_survival_metrics.csv`
+- `results/full_scale/aggregate_survival_metrics.csv`
+- `results/full_scale/threshold_sensitivity.csv`
+- `results/full_scale/cadence_sensitivity.csv`
+- `results/full_scale/shock_recovery_metrics.csv`
+- `results/full_scale/experiment_summary.json`
+- `results/full_scale/experiment_validation.json`
+- `results/full_scale/validation.json`
+- `results/full_scale/*.tex`
+- `figures/full_scale/*.pdf`
 - `scripts/build_pdf.ps1`
 
 ## Artifact Policy
 
 - Canonical PDF path: `C:/Users/wangz/Downloads/39.pdf`
-- GitHub URL: `https://github.com/Jason-Wang313/39_robot_skill_half_life`
-- Visible Desktop copy: intentionally absent in v2.
-- Local generated paper PDF: removed after v2 build.
+- Pages: 25
+- File size: 434,913 bytes
+- SHA256: `5987CFCC7345344C850BEDC488C9D357E881B851692F93F6FE34DFDCBA22643B`
+- Local generated paper PDF: absent after canonical build.
+- Visual render check: passed on the final Downloads PDF.

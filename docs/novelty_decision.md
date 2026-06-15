@@ -1,20 +1,46 @@
 # Novelty Decision
 
-## Chosen thesis
-Robot skills should be reported with a half-life: the time until the deployed success probability falls below half of its initial value under a specified drift process.
+## Chosen Thesis
 
-## Field assumption broken
-The broken assumption is that a learned robot skill is a static artifact once it clears a benchmark. In deployment, the embodiment and workspace continue to change.
+Robot manipulation skills should be reported as temporal deployment objects.
+Initial success and final success are incomplete without a drift-aware lifetime
+statistic, the full decay curve, censoring, horizon, cadence, maintenance, and
+cost.
 
-## Mechanism
-Define an evaluation protocol over repeated days or cycles. Estimate initial success, track the decay curve, and report the first time the curve crosses half of the initial success.
+## Field Assumption Broken
 
-## Why this is worth keeping
-The idea is small but sharp. It makes maintenance, rehearsal, recalibration, and robust policy claims comparable in the same units: extra days or cycles of usable skill life.
+The broken assumption is that a trained or adapted robot skill can be summarized
+by a static benchmark score. Deployment turns a skill into a survival process:
+it persists, decays, recovers, or expires under changing physical conditions.
 
-## Scope limits
-The paper gives a diagnostic and a simulation, not a universal law about real robot aging. A real deployment study would be the next step.
+## Central Mechanism
 
-## V2 boundary
+Use robot skill half-life as a survival-style diagnostic. The metric asks when a
+policy's success under a named drift process first crosses a threshold relative
+to its initial success, and it requires censoring, threshold, horizon, cadence,
+curve, and cost metadata.
 
-The scalar half-life is not meaningful without its threshold and observation window. The v2 stress shows that sentinel rehearsal is censored at 61 days under the 60-day half-success setup but crosses at 89.0 days under a 120-day window. The novelty is the reporting protocol, not a privileged threshold.
+## Why This Is Novel Enough
+
+Nearby work studies continual learning, robust manipulation, adaptation,
+calibration, and sim-to-real transfer. This paper does not propose another
+controller. It makes the deployment time axis reportable and adversarially tests
+how threshold, horizon, cadence, drift, shock recovery, and maintenance cost
+change the interpretation of a skill claim.
+
+## Rejected Directions
+
+- New adaptation algorithm as primary contribution.
+- Static benchmark-only framing.
+- Unscoped claim that one half-life scalar is sufficient.
+- Hardware lifetime claim without hardware logs.
+- Final-success-only evaluation.
+
+## Final Direction
+
+The final paper is a reporting and evaluation contribution:
+1. Define thresholded skill lifetime, half-life, censoring, cadence, AUC, uptime, shock recovery, and cost-aware durability.
+2. Prove that identical initial success does not identify deployment lifetime.
+3. Evaluate the diagnostic across a full-scale deterministic survival suite.
+4. Show where half-life helps and where it is unstable unless paired with the full curve and metadata.
+5. Provide a reporting checklist for deployed robot skills.
