@@ -7,7 +7,7 @@ Final verification timestamp: 2026-06-15 21:02:16 +01:00
 PDF exists: True
 PDF: C:\Users\wangz\Downloads\39.pdf
 Pages: 25
-SHA256: 5987CFCC7345344C850BEDC488C9D357E881B851692F93F6FE34DFDCBA22643B
+SHA256: A8A9CCC28B8996DF055CE60037828F3513107585CE1BADB5C867D332ADB08B2E
 Desktop PDF: intentionally absent
 Repository: https://github.com/Jason-Wang313/39_robot_skill_half_life
 
@@ -17,3 +17,5 @@ Notes:
 - V3 expands the work into a full-scale final manuscript: 14 skill families, 12 drift processes, 16 policies, 112 seeds, 301,056 seed rows, and 8,706,539,520 represented reporting checks.
 - Final canonical export is `C:\Users\wangz\Downloads\39.pdf`; local `main.pdf` is removed by the build script.
 - Final log scan, text marker scan, page-count check, hash check, and visual render review passed.
+- VLA-style link-box QA passed on pages 2, 5, 6, 7, 8, 16, 21, and 22 with 28 green citation boxes, 14 red internal-reference boxes, and 42 visible one-point borders.
+- Latest visual-hardening update: 2026-06-20 11:05:00 +08:00.

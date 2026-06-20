@@ -57,6 +57,7 @@ recovery, maintenance policy, and cost.
 - Canonical PDF path: `C:/Users/wangz/Downloads/39.pdf`
 - Pages: 25
 - File size: 434,913 bytes
-- SHA256: `5987CFCC7345344C850BEDC488C9D357E881B851692F93F6FE34DFDCBA22643B`
+- SHA256: `A8A9CCC28B8996DF055CE60037828F3513107585CE1BADB5C867D332ADB08B2E`
 - Local generated paper PDF: absent after canonical build.
 - Visual render check: passed on the final Downloads PDF.
+- VLA-style link-box check: passed on pages 2, 5, 6, 7, 8, 16, 21, and 22 with 28 green citation boxes, 14 red internal-reference boxes, and 42 visible one-point borders.

@@ -11,6 +11,8 @@ shock recovery analysis, cost accounting, figures, tables, limitations,
 appendices, and reproducibility metadata. The canonical final PDF has been
 exported to Downloads, checked for page count and hash, scanned for stale
 markers, rendered, and visually inspected.
+The final PDF also has VLA-style visible red/green link boxes verified by
+rendering pages 2, 5, 6, 7, 8, 16, 21, and 22.
 
 ## Allowed Claim
 
@@ -29,5 +31,5 @@ survival intervals remain future work.
 
 - PDF: `C:/Users/wangz/Downloads/39.pdf`
 - Pages: 25
-- SHA256: `5987CFCC7345344C850BEDC488C9D357E881B851692F93F6FE34DFDCBA22643B`
-- Visual render: passed
+- SHA256: `A8A9CCC28B8996DF055CE60037828F3513107585CE1BADB5C867D332ADB08B2E`
+- Visual render: passed, including VLA-style link-box QA on pages 2, 5, 6, 7, 8, 16, 21, and 22
