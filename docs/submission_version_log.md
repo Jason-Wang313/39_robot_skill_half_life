@@ -28,4 +28,9 @@
 - Exported canonical final PDF to `C:/Users/wangz/Downloads/39.pdf`.
 - Verified final PDF hash, page count, log cleanliness, text markers, local `main.pdf` absence, and visual render.
 
+## v3 visual hardening
+
+- Rebuilt the same 25-page manuscript with visible VLA-style red/green link boxes.
+- Verified affected pages 2, 5, 6, 7, 8, 16, 21, and 22 by PNG render.
+
 Decision: final v3 full-scale verified.

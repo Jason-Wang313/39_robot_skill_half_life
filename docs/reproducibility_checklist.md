@@ -15,9 +15,10 @@
 - [x] Figures: `figures/full_scale/*.pdf`
 - [x] Canonical PDF path: `C:/Users/wangz/Downloads/39.pdf`
 - [x] Canonical PDF page count: 25
-- [x] Canonical PDF SHA256: `5987CFCC7345344C850BEDC488C9D357E881B851692F93F6FE34DFDCBA22643B`
+- [x] Canonical PDF SHA256: `A8A9CCC28B8996DF055CE60037828F3513107585CE1BADB5C867D332ADB08B2E`
 - [x] Local generated `main.pdf` removed after build.
 - [x] Final PDF rendered to PNGs and visually checked.
+- [x] VLA-style link-box QA passed on pages 2, 5, 6, 7, 8, 16, 21, and 22.
 - [x] Log scan passed for fatal errors, undefined references, unresolved citations, citation-change warnings, and overfull boxes.
 - [ ] Pinned package environment.
 - [ ] Continuous integration.
